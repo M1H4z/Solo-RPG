@@ -87,7 +87,7 @@ export default async function HunterDetailPage({ params }: HunterDetailPageProps
         activeSkills: [/* Fetch or handle skills later */],
         passiveSkills: [/* Fetch or handle skills later */],
         gold: 0, // Add if available in DB
-        diamonds: 0, // Add if available in DB
+        diamonds: 0 // Add if available in DB
     };
 
     return (
@@ -143,12 +143,12 @@ export default async function HunterDetailPage({ params }: HunterDetailPageProps
                 </nav>
             </div>
 
-            {/* Placeholder for future sections like Equipment, Active Effects etc. */}
             {/* 
-            <div className="mt-6 p-4 bg-gray-800 rounded-lg border border-gray-700 shadow-md">
-                <h2 className="text-xl font-semibold mb-4">Equipment</h2>
-                {/* Equipment display component goes here */}
-            </div> 
+              Placeholder for future sections like Equipment, Active Effects etc.
+              <div className="mt-6 p-4 bg-gray-800 rounded-lg border border-gray-700 shadow-md">
+                  <h2 className="text-xl font-semibold mb-4">Equipment</h2>
+                  Equipment display component goes here
+              </div> 
             */}
         </div>
     );
