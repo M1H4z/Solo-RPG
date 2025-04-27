@@ -39,6 +39,9 @@ const RANK_UP_REQUIREMENTS = {
   S: { level: Infinity, nextRank: null }, // Max rank
 };
 
+// Tell Next.js not to statically generate this page
+export const dynamic = 'force-dynamic';
+
 // Convert to functional component to use hooks
 export default function DashboardPage({}: DashboardPageProps) {
   const router = useRouter();

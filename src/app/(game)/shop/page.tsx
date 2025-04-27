@@ -18,6 +18,9 @@ import { Button } from "@/components/ui/Button";
 // const ShopItemCard = ({ item }) => { ... };
 // const CategoryFilter = ({ categories, onSelect }) => { ... };
 
+// Tell Next.js not to statically generate this page
+export const dynamic = 'force-dynamic';
+
 export default function ShopPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
