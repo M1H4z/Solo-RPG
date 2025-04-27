@@ -99,6 +99,9 @@ async function fetchHunterWithInventoryData(
   }
 }
 
+// Tell Next.js not to statically generate this page
+export const dynamic = 'force-dynamic';
+
 export default function InventoryPage() {
   const router = useRouter();
   const searchParams = useSearchParams();

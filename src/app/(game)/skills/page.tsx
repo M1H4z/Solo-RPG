@@ -23,6 +23,9 @@ const skillRanks: SkillRank[] = ["E", "D", "C", "B", "A", "S"];
 // Placeholder component for individual skills later
 // const SkillDisplay = ({ skill }) => { ... };
 
+// Tell Next.js not to statically generate this page
+export const dynamic = 'force-dynamic';
+
 export default function SkillsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
