@@ -14,7 +14,7 @@ import Link from 'next/link';
 import { Separator } from '@/components/ui/Separator';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/Tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { 
   DndContext, 
   closestCenter, 

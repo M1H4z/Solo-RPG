@@ -4,7 +4,7 @@ import React from 'react';
 import { InventoryItem } from '@/types/item.types';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/Card'; // Keep Card for consistent border/bg
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/Tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { RarityColors, RarityGradientColors } from '../../constants/colors'; // Adjust path if needed
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
