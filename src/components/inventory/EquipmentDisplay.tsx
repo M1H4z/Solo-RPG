@@ -5,7 +5,7 @@ import { EquipmentSlot } from './EquipmentSlot'; // Assuming EquipmentSlot is in
 import { EquipmentSlots, InventoryItem, EquipmentSlotType } from '@/types/item.types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/Tooltip"; // Import Tooltip
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // Import Tooltip
 import { cn } from '@/lib/utils'; // Import cn utility
 import { useDroppable } from '@dnd-kit/core'; // Import useDroppable
 
