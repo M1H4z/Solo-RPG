@@ -1,8 +1,8 @@
-import { type ClassValue, clsx } from "clsx"
-import { twMerge } from "tailwind-merge"
+import { type ClassValue, clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
+  return twMerge(clsx(inputs));
 }
 
 // --- Leveling and EXP Calculations ---
@@ -20,7 +20,8 @@ function getExpNeededForLevelGain(targetLevel: number): number {
  * Calculates the *cumulative* EXP needed to reach the start of a specific level.
  * E.g., to reach level 3, you need EXP for L1->2 + EXP for L2->3.
  */
-export function getCumulativeExpForLevelStart(level: number): number { // EXPORTED
+export function getCumulativeExpForLevelStart(level: number): number {
+  // EXPORTED
   if (level <= 1) return 0;
   let cumulativeExp = 0;
   for (let L = 2; L <= level; L++) {
@@ -33,20 +34,22 @@ export function getCumulativeExpForLevelStart(level: number): number { // EXPORT
  * Calculates the current level based on total experience points.
  */
 export function calculateLevelFromExp(experience: number): number {
-  if (experience < 0) experience = 0; 
+  if (experience < 0) experience = 0;
   let level = 1;
   while (true) {
     const expNeededForNextLevelGain = getExpNeededForLevelGain(level + 1);
-    const cumulativeExpForNextLevelStart = getCumulativeExpForLevelStart(level + 1);
-    
+    const cumulativeExpForNextLevelStart = getCumulativeExpForLevelStart(
+      level + 1,
+    );
+
     if (experience < cumulativeExpForNextLevelStart) {
       return level; // Haven't reached the threshold for the next level yet
     }
     level++;
-    if (level > 999) { 
-        console.warn("Max level (999) reached in level calculation loop."); 
-        return level; 
-    } 
+    if (level > 999) {
+      console.warn("Max level (999) reached in level calculation loop.");
+      return level;
+    }
   }
 }
 
@@ -66,4 +69,4 @@ export function calculateNextLevelExpThreshold(currentLevel: number): number {
   const nextLevel = currentLevel + 1;
   return getCumulativeExpForLevelStart(nextLevel); 
 }
-*/ 
+*/
