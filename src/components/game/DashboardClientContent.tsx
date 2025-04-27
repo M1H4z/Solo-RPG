@@ -366,7 +366,8 @@ function DashboardContent() {
 // Export the component wrapped in Suspense
 export default function DashboardClientContent() {
     return (
-        <Suspense fallback={<div>Loading parameters...</div>}> // Add a fallback UI
+        // The fallback UI is displayed while the DashboardContent is loading
+        <Suspense fallback={<div>Loading parameters...</div>}>
             <DashboardContent />
         </Suspense>
     );
