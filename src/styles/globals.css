@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Remove CSS variables, use Tailwind theme directly */
+/*
+:root {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 17, 24, 39;
+  --background-end-rgb: 31, 41, 55;
+}
+*/
+
+body {
+  /* Apply theme colors directly from tailwind.config.js */
+  @apply bg-background text-text-primary;
+  /* Remove gradient, use solid background for now */
+  /* background: linear-gradient(
+      to bottom,
+      rgb(var(--background-start-rgb)),
+      rgb(var(--background-end-rgb))
+    )
+    fixed; */
+}
+
+/* Remove base layer styles for h1, h2, h3 - apply these directly in components */
+/* 
+@layer base {
+  h1 {
+    @apply text-4xl font-bold;
+  }
+  h2 {
+    @apply text-3xl font-semibold;
+  }
+  h3 {
+    @apply text-2xl font-semibold;
+  }
+}
+*/
+
+/* Remove component layer styles - apply these directly in components */
+/*
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors;
+  }
+  .btn-secondary {
+    @apply px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white font-medium rounded-lg transition-colors;
+  }
+  .card {
+    @apply bg-gray-800 rounded-lg shadow-lg p-6;
+  }
+}
+*/

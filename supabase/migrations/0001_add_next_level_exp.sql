@@ -1,0 +1,2 @@
+ALTER TABLE public.hunters
+ADD COLUMN IF NOT EXISTS next_level_experience INTEGER NOT NULL DEFAULT 100; 

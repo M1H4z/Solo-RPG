@@ -1,0 +1,9 @@
+node_modules/
+.vscode/
+.next/
+.cursor/
+.env
+.env.local
+.env.example
+
+
