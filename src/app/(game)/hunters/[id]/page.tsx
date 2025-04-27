@@ -90,7 +90,6 @@ export default async function HunterDetailPage({ params }: HunterDetailPageProps
         diamonds: 0, // Add if available in DB
     };
 
-
     return (
         <div className="container mx-auto px-4 py-8 min-h-screen bg-gray-900 text-white">
             {/* Header Section */}
