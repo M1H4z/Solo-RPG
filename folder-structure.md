@@ -140,4 +140,3 @@ tailwind.config.js # Tailwind CSS configuration (if using)
 postcss.config.js # PostCSS configuration (if using)
 middleware.ts # Next.js middleware (for auth protection)
 supabase.ts # Supabase configuration
- 

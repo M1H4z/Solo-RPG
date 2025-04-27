@@ -1,29 +1,29 @@
-export type EquipmentSlotType = 
-  | 'Head' 
-  | 'Chest' 
-  | 'Legs' 
-  | 'Feet' 
-  | 'Hands' // For gloves/gauntlets
-  | 'MainHand' // Weapon 1
-  | 'OffHand' // Weapon 2 / Shield
-  | 'Accessory1' 
-  | 'Accessory2';
+export type EquipmentSlotType =
+  | "Head"
+  | "Chest"
+  | "Legs"
+  | "Feet"
+  | "Hands" // For gloves/gauntlets
+  | "MainHand" // Weapon 1
+  | "OffHand" // Weapon 2 / Shield
+  | "Accessory1"
+  | "Accessory2";
 
-export type ItemType = 
-  | 'Weapon' 
-  | 'Armor' 
-  | 'Accessory' 
-  | 'Consumable' 
-  | 'Material'; // Crafting, etc.
+export type ItemType =
+  | "Weapon"
+  | "Armor"
+  | "Accessory"
+  | "Consumable"
+  | "Material"; // Crafting, etc.
 
-export type Rarity = 
-  | 'Common' 
-  | 'Uncommon' 
-  | 'Rare' 
-  | 'Epic' 
-  | 'Legendary' 
-  | 'Mythical' 
-  | 'Sovereign';
+export type Rarity =
+  | "Common"
+  | "Uncommon"
+  | "Rare"
+  | "Epic"
+  | "Legendary"
+  | "Mythical"
+  | "Sovereign";
 
 // Represents a base item definition (like in a database)
 export interface BaseItem {
@@ -33,7 +33,20 @@ export interface BaseItem {
   type: ItemType;
   rarity: Rarity;
   icon?: string; // URL or path to item icon
-  stats?: Partial<Record<'strength' | 'agility' | 'perception' | 'intelligence' | 'vitality' | 'attackPower' | 'defense' | 'hp' | 'mp', number>>;
+  stats?: Partial<
+    Record<
+      | "strength"
+      | "agility"
+      | "perception"
+      | "intelligence"
+      | "vitality"
+      | "attackPower"
+      | "defense"
+      | "hp"
+      | "mp",
+      number
+    >
+  >;
   slot?: EquipmentSlotType; // Which slot it goes into, if equippable
   stackable?: boolean;
   sellPrice?: number;
@@ -46,4 +59,6 @@ export interface InventoryItem extends BaseItem {
 }
 
 // Represents the equipped items
-export type EquipmentSlots = Partial<Record<EquipmentSlotType, InventoryItem | null>>; 
+export type EquipmentSlots = Partial<
+  Record<EquipmentSlotType, InventoryItem | null>
+>;

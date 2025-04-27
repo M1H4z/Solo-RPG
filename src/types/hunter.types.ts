@@ -1,5 +1,5 @@
-import { ClassType } from '@/constants/classes.constants';
-import { EquipmentSlots, InventoryItem } from './item.types'; // Import new types
+import { ClassType } from "@/constants/classes.constants";
+import { EquipmentSlots, InventoryItem } from "./item.types"; // Import new types
 
 export interface HunterEquipment {
   head?: string; // Item ID
@@ -55,4 +55,4 @@ export interface Hunter {
   createdAt: string; // ISO date string
   updatedAt: string; // ISO date string
   // TODO: Add skills (active/passive)
-} 
+}

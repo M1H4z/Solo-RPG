@@ -1,9 +1,10 @@
-import type { Metadata } from 'next';
-import '../styles/globals.css';
+import type { Metadata } from "next";
+import "../styles/globals.css";
 
 export const metadata: Metadata = {
-  title: 'Solo Leveling RPG',
-  description: 'A web-based text RPG inspired by Solo Leveling with Pokémon-style combat',
+  title: "Solo Leveling RPG",
+  description:
+    "A web-based text RPG inspired by Solo Leveling with Pokémon-style combat",
 };
 
 export default function RootLayout({
@@ -13,9 +14,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
-} 
+}
