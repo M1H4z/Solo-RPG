@@ -6,8 +6,8 @@ import { getUserSession } from "@/services/authService"; // To ensure user owns 
 import ExperienceBar from "@/components/ui/ExperienceBar";
 import StatsDisplay from "@/components/game/StatsDisplay";
 // import { Database } from "@/types/supabase"; // Assuming supabase types are set up - REMOVED
-import { createServerClient } from "@/lib/supabase/server"; // Server client
-import { cookies } from "next/headers";
+// import { createSupabaseServerClient } from "@/lib/supabase/server"; // Removed: Unused import
+// import { cookies } from "next/headers"; // Removed: Unused import
 
 type HunterDetailPageProps = {
   params: {
@@ -21,84 +21,46 @@ type HunterDetailPageProps = {
 export default async function HunterDetailPage({
   params,
 }: HunterDetailPageProps) {
-  const cookieStore = cookies();
-  const supabase = createServerClient(cookieStore);
+  // const cookieStore = cookies(); // Removed: Unused variable
+  // const supabase = createSupabaseServerClient(); // Removed: Unused variable
   const { id: hunterId } = params;
 
   // 1. Check user session
-  const sessionData = await getUserSession(supabase);
-  if (sessionData.error || !sessionData.session) {
-    console.error("Authentication error:", sessionData.error?.message);
+  const sessionData = await getUserSession(); // Call without arguments
+
+  // Check if session exists
+  if (!sessionData) {
+    console.error("Authentication error: No session found or error fetching session.");
     redirect("/login"); // Redirect to login if not authenticated
   }
-  const userId = sessionData.session.user.id;
 
-  // 2. Fetch Hunter Data using the server client
-  const { data: hunter, error } = await getHunterById(supabase, hunterId);
+  // Session exists, get userId
+  const userId = sessionData.user.id;
 
-  // 3. Handle Errors and Not Found
-  if (error) {
-    console.error("Error fetching hunter:", error.message);
-    // Handle specific errors, e.g., RLS violation or network error
-    // For simplicity, redirecting to selection, but could show an error message
-    redirect("/hunters?error=fetch_failed");
-  }
+  // 2. Fetch Hunter Data using the service function
+  // getHunterById now returns Hunter | null directly, not { data, error }
+  const hunter = await getHunterById(hunterId);
 
+  // 3. Handle Hunter Not Found (or fetch error within getHunterById)
+  // getHunterById should ideally throw on DB errors, and returns null if not found/unauthorized
   if (!hunter) {
-    notFound(); // Show 404 if hunter doesn't exist
+    // Could differentiate between not found and error if getHunterById threw specific errors
+    // or if we added error handling around the await call.
+    // For now, treat null return as "not found or unauthorized".
+    console.warn(`Hunter ${hunterId} not found or access denied for user ${userId}.`);
+    notFound(); // Show 404
   }
 
-  // 4. Authorization Check: Ensure the fetched hunter belongs to the logged-in user
-  // This should ideally be enforced by RLS policies in Supabase,
-  // but an explicit check adds another layer of security.
-  if (hunter.user_id !== userId) {
-    console.warn(
-      `User ${userId} attempted to access hunter ${hunterId} owned by ${hunter.user_id}`,
-    );
-    notFound(); // Treat as not found if not owned by the user
-  }
+  // No need for explicit error handling here if getHunterById throws on DB errors
+  // The error boundary or Next.js default error page would catch it.
 
-  // Map DB columns to Hunter type expected by components if necessary
-  // The current getHunterById likely returns the DB structure. Let's adapt.
-  // We might need to adjust StatsDisplay if it expects nested 'stats'
-  const hunterForDisplay = {
-    id: hunter.id,
-    userId: hunter.user_id,
-    name: hunter.name,
-    class: hunter.class, // Assuming HunterClass type matches DB string
-    level: hunter.level,
-    rank: hunter.rank, // Assuming HunterRank type matches DB string
-    experience: hunter.experience,
-    nextLevelExperience: hunter.next_level_experience,
-    // Base stats for StatsDisplay (adapt based on StatsDisplay's expectation)
-    // If StatsDisplay expects flat structure:
-    strength: hunter.strength,
-    agility: hunter.agility,
-    perception: hunter.perception,
-    intelligence: hunter.intelligence,
-    vitality: hunter.vitality,
-    // If StatsDisplay expects nested hunter.stats:
-    // stats: {
-    //     strength: hunter.strength,
-    //     agility: hunter.agility,
-    //     perception: hunter.perception,
-    //     intelligence: hunter.intelligence,
-    //     vitality: hunter.vitality,
-    // },
-    equipment: {
-      /* Fetch or handle equipment later */
-    },
-    skillPoints: hunter.skill_points,
-    statPoints: hunter.stat_points,
-    activeSkills: [
-      /* Fetch or handle skills later */
-    ],
-    passiveSkills: [
-      /* Fetch or handle skills later */
-    ],
-    gold: 0, // Add if available in DB
-    diamonds: 0, // Add if available in DB
-  };
+  // Authorization check is implicitly handled by getHunterById which checks user_id
+
+  // Calculate required EXP for the current level for the ExperienceBar
+  // hunter.expNeededForNextLevel is the total needed for the *next* level up.
+  // hunter.currentLevelStartExp is the EXP needed to *reach* the current level.
+  const expForCurrentLevel = hunter.expNeededForNextLevel - hunter.currentLevelStartExp;
+  const expProgressInCurrentLevel = hunter.experience - hunter.currentLevelStartExp;
 
   return (
     <div className="container mx-auto min-h-screen bg-gray-900 px-4 py-8 text-white">
@@ -116,35 +78,33 @@ export default async function HunterDetailPage({
         <p className="mb-2 text-lg text-gray-300">
           Level {hunter.level} {hunter.class} - Rank {hunter.rank}
         </p>
-        {/* Experience Bar */}
+        {/* Experience Bar - Use calculated values relative to current level */}
         <div className="mb-4 mt-2">
           <ExperienceBar
-            currentExp={hunter.experience}
-            nextLevelExp={hunter.next_level_experience}
+            currentExp={expProgressInCurrentLevel} // Exp earned within the current level
+            nextLevelExp={expForCurrentLevel}      // Total exp needed for this level
           />
         </div>
-        {/* Stat/Skill Points */}
+        {/* Stat/Skill Points - Use direct properties from Hunter type */}
         <div className="flex space-x-4 text-sm text-gray-400">
           <span>
             Stat Points:{" "}
             <span className="font-semibold text-yellow-400">
-              {hunter.stat_points}
+              {hunter.statPoints} {/* Use camelCase */}
             </span>
           </span>
           <span>
             Skill Points:{" "}
             <span className="font-semibold text-purple-400">
-              {hunter.skill_points}
+              {hunter.skillPoints} {/* Use camelCase */}
             </span>
           </span>
         </div>
       </div>
 
-      {/* Stats Display Section */}
+      {/* Stats Display Section - Pass hunter directly */}
       <div className="mb-6">
-        {/* Pass the mapped hunter object */}
-        {/* @ts-expect-error - Adjust type mapping if TS complains */}
-        <StatsDisplay hunter={hunterForDisplay} />
+        <StatsDisplay hunter={hunter} />
       </div>
 
       {/* Action Links Section */}
