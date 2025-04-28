@@ -18,37 +18,37 @@ interface InventoryIconSlotProps {
   item: InventoryItem;
   onClick: () => void; // Callback when the slot is clicked
   isSelected: boolean; // Is this the currently selected item?
-  isLoading?: boolean; // Optional loading state (e.g., during equip/use)
+  isLoading: boolean; // Optional loading state (e.g., during equip/use)
+  isDragging?: boolean; // Add the new prop
 }
 
 export const InventoryIconSlot: React.FC<InventoryIconSlotProps> = ({
   item,
   onClick,
   isSelected,
-  isLoading = false,
+  isLoading,
+  isDragging = false, // Default to false
 }) => {
   const rarityBorderColor = RarityColors[item.rarity] || "border-border/50";
   const rarityGradientColor = RarityGradientColors[item.rarity] || "gray-500";
   const backgroundClass = `bg-gradient-to-br from-background/50 to-${rarityGradientColor}/10`;
 
   // --- DnD Setup ---
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging: dndIsDragging } =
     useDraggable({
-      // Use inventoryId as the unique ID for dragging
-      id: `inventory-${item.inventoryId}`,
+      id: item.inventoryId, // Use inventoryId as the unique draggable ID
       data: {
-        // Pass necessary item data for the onDragEnd handler
-        type: "inventory", // Differentiate from equipment drags later
-        item: item,
+        type: "inventory",
+        item: item, // Pass the full item data
       },
-      disabled: isLoading, // Disable dragging if an action is loading
     });
 
   // Style for the dragging transform
   const style = transform
     ? {
-        transform: CSS.Translate.toString(transform),
-        zIndex: 100, // Ensure dragged item is above others
+        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+        transition: transition ?? "", // Apply transition if provided by dnd-kit
+        zIndex: 10, // Ensure dragged item is on top
       }
     : undefined;
 
@@ -66,7 +66,7 @@ export const InventoryIconSlot: React.FC<InventoryIconSlotProps> = ({
                 : `border-2 ${rarityBorderColor} hover:border-primary/70`,
               backgroundClass,
               isLoading ? "opacity-50 cursor-not-allowed" : "",
-              isDragging ? "opacity-75 shadow-lg" : "",
+              isDragging ? "opacity-0" : "opacity-100", // Apply opacity when dragging
             )}
             onClick={onClick} // Handle click on the card itself
             onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onClick()} // A11y

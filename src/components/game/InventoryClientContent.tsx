@@ -812,6 +812,7 @@ function InventoryContent() {
                             selectedItem?.inventoryId === item.inventoryId
                           }
                           isLoading={!!actionLoading[item.inventoryId]}
+                          isDragging={activeDragItem?.inventoryId === item.inventoryId}
                         />
                       ))}
                     </div>
