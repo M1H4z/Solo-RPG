@@ -29,7 +29,7 @@ function SkillsContent() {
   const [hunter, setHunter] = useState<Hunter | null>(null);
   const [loading, setLoading] = useState(true); // General page loading
   const [error, setError] = useState<string | null>(null);
-  const [actionLoading, setActionLoading] = useState<string | null>(null); // Skill ID being acted upon
+  const [actionLoading, setActionLoading] = useState<Set<string>>(new Set()); // Track loading state per skill ID
   const [rankFilter, setRankFilter] = useState<SkillRank | "All">("All");
 
   const fetchHunterData = useCallback(
@@ -57,7 +57,7 @@ function SkillsContent() {
         setError(err.message);
       } finally {
         setLoading(false);
-        setActionLoading(null);
+        setActionLoading(new Set());
       }
     },
     [hunterId, router],
@@ -75,8 +75,7 @@ function SkillsContent() {
   const handleApiCall = async (
     actionType: "unlock" | "equip" | "unequip",
     skillId: string,
-    currentHunter: Hunter,
-    previousHunterState: Hunter
+    currentHunter: Hunter
   ) => {
     setError(null);
 
@@ -102,81 +101,90 @@ function SkillsContent() {
 
       console.log(`${actionType} successful:`, result);
 
-      // On success, update state from the API result if available
-      if (result.hunter) {
-        setHunter(result.hunter);
-      } else {
-        // If API didn't return hunter data, log a warning but don't revert.
-        // The optimistic update might still be correct, or another fetch will occur.
-        console.warn(
-          `API call ${actionType} succeeded but didn't return hunter data.`
-        );
-      }
+      // On success, DO NOTHING. Trust the optimistic update.
+      // The catch block will handle corrections if the API failed.
+      // await fetchHunterData(true); // Remove refetch on success
+
     } catch (err: any) {
       console.error(`Failed to ${actionType} skill (${skillId}):`, err);
       const errorMessage =
         err.message ||
         `An error occurred while trying to ${actionType} the skill.`;
       setError(errorMessage);
-      // On failure, refetch data to ensure consistency, discard optimistic changes
+      // On failure, refetch data to correct the optimistic update
       await fetchHunterData(true);
     }
   };
 
   const handleUnlockSkill = async (skillId: string) => {
-    if (!hunter || actionLoading === skillId || (hunter.skillPoints ?? 0) <= 0) return;
+    if (!hunter || actionLoading.has(skillId) || (hunter.skillPoints ?? 0) <= 0)
+      return;
     const skillToUnlock = getSkillById(skillId);
     if (!skillToUnlock) return;
 
-    const previousHunter = { ...hunter };
     const optimisticHunter = {
       ...hunter,
       skillPoints: (hunter.skillPoints ?? 0) - skillToUnlock.skillPointCost,
       unlockedSkills: [...(hunter.unlockedSkills || []), skillId],
     };
     setHunter(optimisticHunter);
-    setActionLoading(skillId);
+    setActionLoading((prev) => new Set(prev).add(skillId));
 
     try {
-      await handleApiCall("unlock", skillId, hunter, previousHunter);
+      await handleApiCall("unlock", skillId, hunter);
     } finally {
-      setActionLoading(null);
+      setActionLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(skillId);
+        return next;
+      });
     }
   };
 
   const handleEquipSkill = async (skillId: string) => {
-    if (!hunter || actionLoading === skillId || (hunter.equippedSkills?.length ?? 0) >= MAX_EQUIPPED) return;
+    if (
+      !hunter ||
+      actionLoading.has(skillId) ||
+      (hunter.equippedSkills?.length ?? 0) >= MAX_EQUIPPED
+    )
+      return;
 
-    const previousHunter = { ...hunter };
     const optimisticHunter = {
       ...hunter,
       equippedSkills: [...(hunter.equippedSkills || []), skillId],
     };
     setHunter(optimisticHunter);
-    setActionLoading(skillId);
+    setActionLoading((prev) => new Set(prev).add(skillId));
 
     try {
-      await handleApiCall("equip", skillId, hunter, previousHunter);
+      await handleApiCall("equip", skillId, hunter);
     } finally {
-      setActionLoading(null);
+      setActionLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(skillId);
+        return next;
+      });
     }
   };
 
   const handleUnequipSkill = async (skillId: string) => {
-    if (!hunter || actionLoading === skillId) return;
+    if (!hunter || actionLoading.has(skillId)) return;
 
-    const previousHunter = { ...hunter };
     const optimisticHunter = {
       ...hunter,
-      equippedSkills: (hunter.equippedSkills || []).filter(id => id !== skillId),
+      equippedSkills: (hunter.equippedSkills || []).filter((id) => id !== skillId),
     };
     setHunter(optimisticHunter);
-    setActionLoading(skillId);
+    setActionLoading((prev) => new Set(prev).add(skillId));
 
     try {
-      await handleApiCall("unequip", skillId, hunter, previousHunter);
+      await handleApiCall("unequip", skillId, hunter);
     } finally {
-      setActionLoading(null);
+      setActionLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(skillId);
+        return next;
+      });
     }
   };
 
@@ -282,7 +290,7 @@ function SkillsContent() {
                     onUnlock={handleUnlockSkill}
                     onEquip={handleEquipSkill}
                     onUnequip={handleUnequipSkill}
-                    isLoading={actionLoading === skill.id}
+                    isLoading={actionLoading.has(skill.id)}
                     isEquipped={true}
                     isUnlocked={true}
                   />
@@ -364,7 +372,7 @@ function SkillsContent() {
                 onUnlock={handleUnlockSkill}
                 onEquip={handleEquipSkill}
                 onUnequip={handleUnequipSkill}
-                isLoading={actionLoading === skill.id}
+                isLoading={actionLoading.has(skill.id)}
                 isEquipped={isEquipped}
                 isUnlocked={isUnlocked}
               />
