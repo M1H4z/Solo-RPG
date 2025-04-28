@@ -9,27 +9,77 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      currency_transactions: {
+        Row: {
+          amount_change: number
+          created_at: string
+          currency_type: Database["public"]["Enums"]["currency_enum"]
+          hunter_id: string
+          id: string
+          new_balance: number
+          source: string
+          source_details: Json | null
+          transaction_time: string
+        }
+        Insert: {
+          amount_change: number
+          created_at?: string
+          currency_type: Database["public"]["Enums"]["currency_enum"]
+          hunter_id: string
+          id?: string
+          new_balance: number
+          source: string
+          source_details?: Json | null
+          transaction_time?: string
+        }
+        Update: {
+          amount_change?: number
+          created_at?: string
+          currency_type?: Database["public"]["Enums"]["currency_enum"]
+          hunter_id?: string
+          id?: string
+          new_balance?: number
+          source?: string
+          source_details?: Json | null
+          transaction_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "currency_transactions_hunter_id_fkey"
+            columns: ["hunter_id"]
+            isOneToOne: false
+            referencedRelation: "hunters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hunter_inventory_items: {
         Row: {
           created_at: string
+          equipped_slot: string | null
           hunter_id: string
           instance_id: string
           item_id: string
           quantity: number
+          updated_at: string
         }
         Insert: {
           created_at?: string
+          equipped_slot?: string | null
           hunter_id: string
           instance_id?: string
           item_id: string
           quantity?: number
+          updated_at: string
         }
         Update: {
           created_at?: string
+          equipped_slot?: string | null
           hunter_id?: string
           instance_id?: string
           item_id?: string
           quantity?: number
+          updated_at?: string
         }
         Relationships: [
           {
@@ -53,6 +103,7 @@ export type Database = {
           agility: number
           class: string
           created_at: string
+          diamonds: number
           equipped_accessory1: string | null
           equipped_accessory2: string | null
           equipped_chest: string | null
@@ -64,6 +115,7 @@ export type Database = {
           equipped_offhand: string | null
           equipped_skills: string[] | null
           experience: number
+          gold: number
           id: string
           intelligence: number
           level: number
@@ -83,6 +135,7 @@ export type Database = {
           agility?: number
           class: string
           created_at?: string
+          diamonds?: number
           equipped_accessory1?: string | null
           equipped_accessory2?: string | null
           equipped_chest?: string | null
@@ -94,6 +147,7 @@ export type Database = {
           equipped_offhand?: string | null
           equipped_skills?: string[] | null
           experience?: number
+          gold?: number
           id?: string
           intelligence?: number
           level?: number
@@ -113,6 +167,7 @@ export type Database = {
           agility?: number
           class?: string
           created_at?: string
+          diamonds?: number
           equipped_accessory1?: string | null
           equipped_accessory2?: string | null
           equipped_chest?: string | null
@@ -124,6 +179,7 @@ export type Database = {
           equipped_offhand?: string | null
           equipped_skills?: string[] | null
           experience?: number
+          gold?: number
           id?: string
           intelligence?: number
           level?: number
@@ -207,43 +263,70 @@ export type Database = {
       }
       items: {
         Row: {
+          class_requirement: string[] | null
           created_at: string
           description: string | null
+          diamond_cost: number | null
+          effects: Json | null
+          gold_cost: number | null
           icon: string | null
           id: string
+          is_event_item: boolean
+          is_purchasable: boolean
           item_type: string
+          level_requirement: number
+          max_stack: number
           name: string
           rarity: string
           sell_price: number | null
           slot: string | null
           stackable: boolean
           stats: Json | null
+          updated_at: string
         }
         Insert: {
+          class_requirement?: string[] | null
           created_at?: string
           description?: string | null
+          diamond_cost?: number | null
+          effects?: Json | null
+          gold_cost?: number | null
           icon?: string | null
           id: string
+          is_event_item?: boolean
+          is_purchasable?: boolean
           item_type: string
+          level_requirement?: number
+          max_stack?: number
           name: string
           rarity: string
           sell_price?: number | null
           slot?: string | null
           stackable?: boolean
           stats?: Json | null
+          updated_at: string
         }
         Update: {
+          class_requirement?: string[] | null
           created_at?: string
           description?: string | null
+          diamond_cost?: number | null
+          effects?: Json | null
+          gold_cost?: number | null
           icon?: string | null
           id?: string
+          is_event_item?: boolean
+          is_purchasable?: boolean
           item_type?: string
+          level_requirement?: number
+          max_stack?: number
           name?: string
           rarity?: string
           sell_price?: number | null
           slot?: string | null
           stackable?: boolean
           stats?: Json | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -279,13 +362,39 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      adjust_hunter_diamonds: {
+        Args: { p_hunter_id: string; p_user_id: string; p_amount: number }
+        Returns: Json
+      }
+      adjust_hunter_gold: {
+        Args: { p_hunter_id: string; p_user_id: string; p_amount: number }
+        Returns: Json
+      }
       allocate_stat_point: {
         Args: { hunter_id_in: string; stat_name_in: string; user_id_in: string }
         Returns: number
       }
+      allocate_stats_bulk: {
+        Args: {
+          hunter_id_param: string
+          user_id_param: string
+          allocations_param: Json
+          points_to_spend_param: number
+        }
+        Returns: Json
+      }
+      purchase_item: {
+        Args: {
+          p_hunter_id: string
+          p_item_id: string
+          p_user_id: string
+          p_quantity?: number
+        }
+        Returns: Json
+      }
     }
     Enums: {
-      [_ in never]: never
+      currency_enum: "gold" | "diamonds"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -400,6 +509,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      currency_enum: ["gold", "diamonds"],
+    },
   },
 } as const
