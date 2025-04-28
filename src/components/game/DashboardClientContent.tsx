@@ -405,6 +405,22 @@ function DashboardContent() {
                     Skills
                   </Link>
                 </Button>
+                <Button variant="secondary" className="w-full" asChild>
+                  <Link
+                    href={`/inventory?hunterId=${hunterId}`}
+                    className="flex size-full items-center justify-center"
+                  >
+                    Inventory
+                  </Link>
+                </Button>
+                <Button variant="secondary" className="w-full" asChild>
+                  <Link
+                    href={`/shop?hunterId=${hunterId}`}
+                    className="flex size-full items-center justify-center"
+                  >
+                    Shop
+                  </Link>
+                </Button>
               </CardContent>
             </Card>
           </div>
