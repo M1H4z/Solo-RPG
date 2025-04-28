@@ -230,21 +230,84 @@ export async function getHunterById(hunterId: string): Promise<Hunter | null> {
   }
 }
 
-// Add Hunter Stat/Skill Allocation Functions (if they were here before)
-// Example placeholder - implement based on previous logic if needed
+/**
+ * Allocates a stat point to a hunter.
+ *
+ * @param hunterId The ID of the hunter to allocate the stat point to.
+ * @param statName The name of the stat to allocate.
+ * @returns { success: boolean; updatedHunter?: Hunter; error?: string; message?: string }
+ */
 export async function allocateStatPoint(
   hunterId: string,
   statName: string,
-): Promise<{ success: boolean; updatedHunter?: Hunter; error?: string }> {
-  // TODO: Implement logic to check points, update hunter stats in DB
-  console.warn("allocateStatPoint function not fully implemented yet.");
-  // Fetch updated hunter data after allocation
-  const updatedHunter = await getHunterById(hunterId);
-  return {
-    success: false,
-    updatedHunter: updatedHunter || undefined,
-    error: "Not implemented",
-  };
+): Promise<{ success: boolean; updatedHunter?: Hunter; error?: string; message?: string }> {
+  const session = await getUserSession();
+  if (!session?.user) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  // Basic validation for inputs
+  const VALID_STATS = ["strength", "agility", "perception", "intelligence", "vitality"];
+  if (!hunterId || !statName || !VALID_STATS.includes(statName)) {
+    return { success: false, error: "Hunter ID and a valid Stat Name are required." };
+  }
+
+  const supabase = createSupabaseServerClient();
+  const userId = session.user.id; // Needed if RPC function also checks owner
+
+  try {
+    // Call the database function to perform the atomic update
+    // Assumes a function like: allocate_stat_point(hunter_id_in uuid, stat_name_in text, user_id_in uuid)
+    // returning the number of rows updated (1 if successful, 0 if no points/wrong user/hunter not found)
+    const { data: updatedRowCount, error: rpcError } = await supabase.rpc(
+      "allocate_stat_point",
+      {
+        hunter_id_in: hunterId,
+        stat_name_in: statName,
+        user_id_in: userId, // Pass user ID for ownership check within the function
+      },
+    );
+
+    if (rpcError) {
+      console.error("allocateStatPoint - RPC Error:", rpcError);
+      throw new Error(`Database function error allocating ${statName}: ${rpcError.message}`);
+    }
+
+    // Check if the function successfully updated a row
+    if (updatedRowCount !== 1) {
+      // Could be due to various reasons handled within the function (no points, wrong user, etc.)
+      console.warn(`allocate_stat_point RPC for hunter ${hunterId} returned ${updatedRowCount} rows affected.`);
+      // Try fetching the hunter to see if points were the issue
+      const currentHunter = await supabase.from("hunters").select("stat_points").eq("id", hunterId).eq("user_id", userId).maybeSingle();
+      if (currentHunter?.data?.stat_points === 0) {
+          return { success: false, error: "No stat points available to allocate." };
+      }
+      // Otherwise, return a more generic error or specific one if deduced
+      return { success: false, error: "Failed to allocate stat point. Hunter not found, no points available, or access denied." };
+    }
+
+    // If RPC succeeded (updated 1 row), fetch the complete updated hunter data
+    const updatedHunter = await getHunterById(hunterId);
+    if (!updatedHunter) {
+      // This case should be rare if RPC succeeded, indicates potential inconsistency
+      console.error("allocateStatPoint - Failed to fetch hunter after successful RPC update.");
+      throw new Error("Inconsistency: Failed to retrieve updated hunter data after allocation.");
+    }
+
+    // Return success
+    return {
+      success: true,
+      updatedHunter: updatedHunter,
+      message: `Successfully allocated 1 point to ${statName}.`,
+    };
+
+  } catch (error: any) {
+    console.error("allocateStatPoint - Unexpected Error:", error);
+    return {
+      success: false,
+      error: error.message || "An unexpected error occurred allocating stat point.",
+    };
+  }
 }
 
 export async function gainExperience(
@@ -255,16 +318,113 @@ export async function gainExperience(
   updatedHunter?: Hunter;
   message?: string;
   error?: string;
+  // Optional: Include level up details for the message/toast
+  levelUp?: boolean;
+  newLevel?: number;
+  levelsGained?: number;
+  statPointsGained?: number;
+  skillPointsGained?: number;
 }> {
-  // TODO: Implement logic to update hunter experience, check for level up, grant points
-  console.warn("gainExperience function not fully implemented yet.");
-  // Fetch updated hunter data after gaining exp
-  const updatedHunter = await getHunterById(hunterId);
-  return {
-    success: false,
-    updatedHunter: updatedHunter || undefined,
-    error: "Not implemented",
-  };
+  const session = await getUserSession();
+  if (!session?.user) {
+    return { success: false, error: "Unauthorized" };
+  }
+  if (!hunterId || amount == null || amount <= 0) {
+    return { success: false, error: "Hunter ID and valid positive amount are required." };
+  }
+
+  const supabase = createSupabaseServerClient();
+  const userId = session.user.id;
+
+  try {
+    // 1. Fetch current hunter data needed for calculation
+    const { data: currentHunterData, error: fetchError } = await supabase
+      .from("hunters")
+      .select("experience, level, stat_points, skill_points") // Fetch necessary fields
+      .eq("id", hunterId)
+      .eq("user_id", userId)
+      .single();
+
+    if (fetchError) {
+      if (fetchError.code === "PGRST116") {
+        return { success: false, error: "Hunter not found or access denied." };
+      }
+      console.error("gainExperience - Fetch Error:", fetchError);
+      throw new Error("Database error fetching hunter data");
+    }
+
+    // 2. Calculate new state
+    const currentExperience = currentHunterData.experience ?? 0;
+    const currentLevel = currentHunterData.level ?? calculateLevelFromExp(currentExperience); // Use DB level or calculate
+    const newTotalExperience = currentExperience + amount;
+    const newCalculatedLevel = calculateLevelFromExp(newTotalExperience);
+
+    let levelUp = false;
+    let levelsGained = 0;
+    let statPointsGained = 0;
+    let skillPointsGained = 0;
+    let updatedStatPoints = currentHunterData.stat_points ?? 0;
+    let updatedSkillPoints = currentHunterData.skill_points ?? 0;
+
+    if (newCalculatedLevel > currentLevel) {
+        levelUp = true;
+        levelsGained = newCalculatedLevel - currentLevel;
+        // Award points for each level gained (e.g., 5 points per level)
+        statPointsGained = levelsGained * 5; // Example: 5 stat points per level
+        skillPointsGained = levelsGained * 5; // Example: 5 skill points per level
+        updatedStatPoints += statPointsGained;
+        updatedSkillPoints += skillPointsGained;
+    }
+
+    // 3. Prepare update payload
+    const updatePayload: any = {
+        experience: newTotalExperience,
+    };
+    if (levelUp) {
+        updatePayload.level = newCalculatedLevel;
+        updatePayload.stat_points = updatedStatPoints;
+        updatePayload.skill_points = updatedSkillPoints;
+    }
+
+    // 4. Update hunter in DB
+    const { error: updateError } = await supabase
+      .from("hunters")
+      .update(updatePayload)
+      .eq("id", hunterId)
+      .eq("user_id", userId);
+
+    if (updateError) {
+      console.error("gainExperience - Update Error:", updateError);
+      throw new Error("Database error updating experience/level/points");
+    }
+
+    // 5. Fetch the complete updated hunter data
+    const updatedHunter = await getHunterById(hunterId);
+    if (!updatedHunter) {
+      console.error("gainExperience - Failed to fetch hunter after update.");
+      throw new Error("Failed to retrieve updated hunter data.");
+    }
+
+    // 6. Return success response
+    const message = `Gained ${amount} EXP.${levelUp ? ` Leveled up to ${newCalculatedLevel}!` : ""}`;
+    return {
+      success: true,
+      updatedHunter: updatedHunter,
+      message: message,
+      levelUp: levelUp,
+      newLevel: levelUp ? newCalculatedLevel : undefined,
+      levelsGained: levelUp ? levelsGained : 0,
+      statPointsGained: levelUp ? statPointsGained : 0,
+      skillPointsGained: levelUp ? skillPointsGained : 0,
+    };
+
+  } catch (error: any) {
+    console.error("gainExperience - Unexpected Error:", error);
+    return {
+      success: false,
+      error: error.message || "An unexpected error occurred gaining experience.",
+    };
+  }
 }
 
 // TODO: Add functions for selecting and potentially updating hunter (e.g., active status)

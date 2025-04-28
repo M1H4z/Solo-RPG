@@ -67,6 +67,7 @@ export async function POST(
     return NextResponse.json({
       success: true,
       message: result.message,
+      hunter: result.updatedHunter,
     });
   } catch (error: any) {
     console.error(

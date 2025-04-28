@@ -55,7 +55,8 @@ import {
   cn
 } from "@/lib/utils";
 import {
-  toast
+  toast,
+  Toaster
 } from "sonner";
 import {
   Tooltip,
@@ -72,6 +73,7 @@ import {
   useSensors,
   DragEndEvent,
   DragOverlay,
+  DragStartEvent,
 } from "@dnd-kit/core";
 
 // Define possible item types for filtering (including 'All')
@@ -218,13 +220,24 @@ function InventoryContent() {
             RARITY_ORDER.indexOf(b.rarity) - RARITY_ORDER.indexOf(a.rarity)
           );
         case "type_asc":
-          return a.type.localeCompare(b.type);
+          // Handle missing types: sort them to the end
+          if (!a.type && !b.type) return 0; // Both missing, treat as equal
+          if (!a.type) return 1; // a missing, comes after b
+          if (!b.type) return -1; // b missing, comes after a
+          return (a.type || "").localeCompare(b.type || ""); // Use correct property: type
         case "type_desc":
-          return b.type.localeCompare(a.type);
+          // Handle missing types: sort them to the beginning
+          if (!a.type && !b.type) return 0; // Both missing, treat as equal
+          if (!a.type) return -1; // a missing, comes before b
+          if (!b.type) return 1; // b missing, comes before a
+          return (b.type || "").localeCompare(a.type || ""); // Use correct property: type
         default:
           return 0;
       }
     });
+
+    // Log the items after sorting
+    console.log(`Sorted Items (Criteria: ${sortCriteria}):`, [...items]);
 
     return items;
   }, [inventory, equipment, filterType, sortCriteria]);
@@ -245,11 +258,15 @@ function InventoryContent() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Failed to add item");
-      alert(`Added: ${result.addedItem?.name || "Unknown Item"}`);
-      setInventory(result.inventory);
+      toast.success(`Added: ${result.addedItem?.name || "Unknown Item"}`);
+      if (Array.isArray(result.inventory)) {
+          setInventory(result.inventory);
+      } else {
+           console.warn("/add-item API did not return a valid inventory array.");
+      }
     } catch (err: any) {
       console.error("Error adding item:", err);
-      alert(`Error: ${err.message}`);
+      toast.error(`Error adding item: ${err.message}`);
     } finally {
       setItemActionLoading("add-item", false);
     }
@@ -258,28 +275,63 @@ function InventoryContent() {
   const handleEquipItem = async (inventoryId: string) => {
     if (!hunterId || !selectedItem || selectedItem.inventoryId !== inventoryId)
       return;
-    const item = selectedItem;
+
+    const itemToEquip = selectedItem;
+    const slot = itemToEquip.slot;
+    if (!slot) return; // Cannot equip item without a designated slot
+
+    // Store previous state for potential rollback
+    const previousInventory = [...inventory];
+    const previousEquipment = { ...equipment };
+
+    // Optimistic UI Update
     setItemActionLoading(inventoryId, true);
     setError(null);
+    setSelectedItem(null); // Close panel immediately
+
+    // Determine the actual target slot(s)
+    // TODO: Handle complex slot logic (e.g., MainHand/OffHand choice)
+    const targetSlot = slot; // Basic case
+
+    // Optimistically remove from inventory
+    const newInventory = previousInventory.filter(i => i.inventoryId !== inventoryId);
+    // Optimistically add to equipment
+    const newEquipment = { ...previousEquipment, [targetSlot]: itemToEquip };
+
+    setInventory(newInventory);
+    setEquipment(newEquipment);
+    // --- End Optimistic Update
+
     try {
       const response = await fetch(`/api/hunters/${hunterId}/equip`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          inventoryId
-        }),
+        body: JSON.stringify({ inventoryId }), // Backend decides final slot based on item
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Failed to equip item");
-      setInventory(result.inventory);
-      setEquipment(result.equipment);
-      setSelectedItem(null);
-      toast.success(`${item.name} equipped successfully.`);
+
+      // On success, update state with potentially confirmed data from backend (optional)
+      // For now, just ensure the loading state is off and show success toast
+      if (Array.isArray(result.inventory)) {
+        setInventory(result.inventory); // Use backend confirmed state
+      } else {
+        console.warn("/equip API did not return a valid inventory array. State might be inconsistent.");
+        // Optionally revert or refetch here if inventory consistency is critical
+      }
+      setEquipment(result.equipment); // Use backend confirmed state
+      toast.success(`${itemToEquip.name} equipped successfully.`);
+
     } catch (err: any) {
       console.error("Error equipping item:", err);
       setError(err.message);
+      toast.error(`Error equipping ${itemToEquip.name}: ${err.message}`);
+      // Rollback UI on error
+      setInventory(previousInventory);
+      setEquipment(previousEquipment);
+      setSelectedItem(itemToEquip); // Re-select the item
     } finally {
       setItemActionLoading(inventoryId, false);
     }
@@ -287,30 +339,56 @@ function InventoryContent() {
 
   const handleUnequipItem = async (slot: EquipmentSlotType) => {
     if (!hunterId || !equipment[slot]) return;
-    const itemId = equipment[slot] ? .inventoryId;
-    setItemActionLoading(itemId || "", true);
+
+    const itemToUnequip = equipment[slot];
+    if (!itemToUnequip) return;
+
+    const inventoryId = itemToUnequip.inventoryId;
+
+    // Store previous state
+    const previousInventory = [...inventory];
+    const previousEquipment = { ...equipment };
+
+    // Optimistic UI Update
+    setItemActionLoading(inventoryId || slot, true);
     setError(null);
+    closeDetailsPanel(); // Close panel immediately
+
+    const newEquipment = { ...previousEquipment, [slot]: null }; // Remove from slot optimistically
+
+    setEquipment(newEquipment); // Only update equipment optimistically
+    // --- End Optimistic Update
+
     try {
       const response = await fetch(`/api/hunters/${hunterId}/unequip`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          slot
-        }),
+        body: JSON.stringify({ slot }),
       });
       const result = await response.json();
-      if (!response.ok)
-        throw new Error(result.error || "Failed to unequip item");
-      setEquipment(result.equipment);
-      closeDetailsPanel();
-      toast.success(`${equipment[slot]?.name} unequipped.`);
+      if (!response.ok) throw new Error(result.error || "Failed to unequip item");
+
+      // Success: Confirm state with backend data (optional but good practice)
+      setEquipment(result.equipment); // Use backend confirmed state
+      // Inventory might also change if backend manages it differently
+      if (Array.isArray(result.inventory)) {
+         setInventory(result.inventory); // If backend returns updated inventory
+      } else {
+         console.warn("/unequip API did not return a valid inventory array. State might be inconsistent.");
+      }
+      toast.success(`${itemToUnequip.name} unequipped.`);
+
     } catch (err: any) {
       console.error("Error unequipping item:", err);
-      toast.error(`Error: ${err.message}`);
+      toast.error(`Error unequipping ${itemToUnequip.name}: ${err.message}`);
+      // Rollback UI - Restore previous equipment state
+      setEquipment(previousEquipment);
+      // No need to rollback inventory optimistically if it wasn't changed optimistically
+      // setInventory(previousInventory); // This might be needed if sync fails badly
     } finally {
-      setItemActionLoading(itemId || "", false);
+      setItemActionLoading(inventoryId || slot, false);
     }
   };
 
@@ -322,7 +400,7 @@ function InventoryContent() {
     setError(null);
     console.log(`Attempting to use item: ${itemToUse.name} (${inventoryId})`);
     await new Promise((res) => setTimeout(res, 500)); // Simulate API call
-    alert(`Used ${itemToUse.name}! (Functionality not fully implemented)`);
+    toast.info(`Used ${itemToUse.name}! (WIP)`);
     setItemActionLoading(inventoryId, false);
     setSelectedItem(null);
   };
@@ -330,40 +408,65 @@ function InventoryContent() {
   const handleDropItem = async (inventoryId: string, itemName: string) => {
     if (!hunterId) return;
 
-    if (
-      !confirm(
-        `Are you sure you want to drop ${itemName}? This action cannot be undone.`,
-      )
-    ) {
-      return;
-    }
+    // Find the item to potentially re-select on error
+    const itemToDrop = inventory.find(i => i.inventoryId === inventoryId);
 
-    setItemActionLoading(inventoryId, true);
-    try {
-      const response = await fetch(`/api/hunters/${hunterId}/drop-item`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          inventoryId: inventoryId
-        }),
-      });
-      const data = await response.json();
+    // --- Replace confirm() with toast with actions ---
+    toast.warning(
+        `Are you sure you want to drop ${itemName}? This cannot be undone.`,
+        {
+            action: {
+                label: "Confirm Drop",
+                onClick: async () => {
+                    // --- Logic moved inside the confirm action ---
+                    // Store previous state
+                    const previousInventory = [...inventory];
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to drop item");
-      }
+                    // Optimistic Update
+                    setItemActionLoading(inventoryId, true);
+                    setSelectedItem(null); // Close panel
+                    const newInventory = previousInventory.filter(item => item.inventoryId !== inventoryId);
+                    setInventory(newInventory);
+                    // --- End Optimistic Update
 
-      setInventory(data.inventory);
-      setSelectedItem(null);
-      toast.success(`${itemName} dropped successfully.`);
-    } catch (error: any) {
-      console.error("Error dropping item:", error);
-      toast.error(`Error: ${error.message}`);
-    } finally {
-      setItemActionLoading(inventoryId, false);
-    }
+                    try {
+                        const response = await fetch(`/api/hunters/${hunterId}/drop-item`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ inventoryId: inventoryId }),
+                        });
+                        const data = await response.json();
+                        if (!response.ok) throw new Error(data.error || "Failed to drop item");
+
+                        // Success: UI already updated, just show toast
+                        if (Array.isArray(data.inventory)) {
+                            setInventory(data.inventory);
+                        } else {
+                            console.warn("/drop-item API did not return a valid inventory array (or did not return one).");
+                        }
+                        toast.success(`${itemName} dropped successfully.`);
+
+                    } catch (error: any) {
+                        console.error("Error dropping item:", error);
+                        toast.error(`Error dropping ${itemName}: ${error.message}`);
+                        // Rollback UI
+                        setInventory(previousInventory);
+                        if (itemToDrop) setSelectedItem(itemToDrop); // Re-select if possible
+                    } finally {
+                        setItemActionLoading(inventoryId, false);
+                    }
+                    // --- End of logic moved inside confirm action ---
+                },
+            },
+            cancel: {
+                label: "Cancel",
+                onClick: () => { /* Do nothing, just dismiss */ }
+            },
+            duration: 10000, // Keep toast longer for confirmation
+        }
+    );
+
+    // --- REMOVED Original try...catch block that was outside confirm() ---
   };
 
   const handleEquipmentSelect = (item: InventoryItem) => {
@@ -383,7 +486,7 @@ function InventoryContent() {
 
   const handleDragStart = (event: DragStartEvent) => {
     console.log("Drag Start:", event.active.id, event.active.data.current);
-    if (event.active.data.current ? .item) {
+    if (event.active.data.current?.item) {
       setActiveDragItem(event.active.data.current.item);
     }
   };
@@ -413,8 +516,8 @@ function InventoryContent() {
     });
 
     if (
-      activeData ? .type === "inventory" &&
-      overData ? .type === "equipment-slot"
+      activeData?.type === "inventory" &&
+      overData?.type === "equipment-slot"
     ) {
       const draggedItem = activeData.item as InventoryItem;
       const targetSlot = overData.slot as EquipmentSlotType;
@@ -454,8 +557,8 @@ function InventoryContent() {
       }
     } else {
       console.log("Unhandled drag scenario:", {
-        activeType: activeData ? .type,
-        overType: overData ? .type,
+        activeType: activeData?.type,
+        overType: overData?.type,
       });
     }
   };
@@ -465,25 +568,56 @@ function InventoryContent() {
     itemName: string,
   ) => {
     if (!hunterId) return;
+
+    const itemToEquip = inventory.find(i => i.inventoryId === inventoryId);
+    if (!itemToEquip || !itemToEquip.slot) {
+        toast.error("Cannot equip this item.");
+        return;
+    }
+    const targetSlot = itemToEquip.slot; // Use item's default slot
+
+    // Store previous state for rollback
+    const previousInventory = [...inventory];
+    const previousEquipment = { ...equipment };
+
+    // Optimistic Update
     setItemActionLoading(inventoryId, true);
     setError(null);
+    setSelectedItem(null); // Close details panel
+
+    // Optimistically remove from inventory
+    const newInventory = previousInventory.filter(i => i.inventoryId !== inventoryId);
+    // Optimistically add to equipment
+    const newEquipment = { ...previousEquipment, [targetSlot]: itemToEquip };
+
+    setInventory(newInventory);
+    setEquipment(newEquipment);
+    // --- End Optimistic Update
+
     try {
-      const response = await fetch(`/api/hunters/${hunterId}/equip`, {
+      const response = await fetch(`/api/hunters/${hunterId}/equip`, { // Uses the standard equip endpoint
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          inventoryId
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inventoryId }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Failed to equip item");
+
+      // Sync with backend state on success
+      if (Array.isArray(result.inventory)) {
+          setInventory(result.inventory);
+      } else {
+          console.warn("/equip API (DnD) did not return a valid inventory array.");
+      }
       setEquipment(result.equipment);
       toast.success(`${itemName} equipped successfully.`);
+
     } catch (err: any) {
       console.error("Error equipping item via DnD (default slot):", err);
-      toast.error(`Error: ${err.message}`);
+      toast.error(`Error equipping ${itemName}: ${err.message}`);
+      // Rollback
+      setInventory(previousInventory);
+      setEquipment(previousEquipment);
     } finally {
       setItemActionLoading(inventoryId, false);
     }
@@ -492,33 +626,61 @@ function InventoryContent() {
   const handleEquipItemToSlotViaDnD = async (
     inventoryId: string,
     itemName: string,
-    targetSlot: EquipmentSlotType,
+    targetSlot: EquipmentSlotType, // Specific slot from drop target
   ) => {
     if (!hunterId) return;
+
+    const itemToEquip = inventory.find(i => i.inventoryId === inventoryId);
+     if (!itemToEquip) {
+        toast.error("Item not found.");
+        return;
+    }
+    // Validation if needed (e.g., can item actually go in targetSlot?)
+    // For now, assume backend handles validation primarily
+
+    // Store previous state for rollback
+    const previousInventory = [...inventory];
+    const previousEquipment = { ...equipment };
+
+    // Optimistic Update
     setItemActionLoading(inventoryId, true);
     setError(null);
+    setSelectedItem(null); // Close details panel
+
+    // Optimistically remove from inventory
+    const newInventory = previousInventory.filter(i => i.inventoryId !== inventoryId);
+    // Optimistically add to equipment
+    const newEquipment = { ...previousEquipment, [targetSlot]: itemToEquip };
+
+    setInventory(newInventory);
+    setEquipment(newEquipment);
+    // --- End Optimistic Update
+
     try {
+      // Ensure this API endpoint exists and handles targetSlot correctly
       const response = await fetch(`/api/hunters/${hunterId}/equip-to-slot`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          inventoryId,
-          targetSlot
-        }), // Send targetSlot
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inventoryId, targetSlot }),
       });
       const result = await response.json();
-      if (!response.ok)
-        throw new Error(result.error || "Failed to equip item to slot");
+      if (!response.ok) throw new Error(result.error || "Failed to equip item to slot");
+
+      // Sync with backend state on success
+      if (Array.isArray(result.inventory)) {
+        setInventory(result.inventory);
+      } else {
+         console.warn("/equip-to-slot API did not return a valid inventory array.");
+      }
       setEquipment(result.equipment);
       toast.success(`${itemName} equipped successfully to ${targetSlot}.`);
+
     } catch (err: any) {
-      console.error(
-        `Error equipping item via DnD (specific slot ${targetSlot}):`,
-        err,
-      );
-      toast.error(`Error: ${err.message}`);
+      console.error(`Error equipping item via DnD (specific slot ${targetSlot}):`, err);
+      toast.error(`Error equipping ${itemName}: ${err.message}`);
+      // Rollback
+      setInventory(previousInventory);
+      setEquipment(previousEquipment);
     } finally {
       setItemActionLoading(inventoryId, false);
     }
@@ -550,6 +712,7 @@ function InventoryContent() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
+      <Toaster position="bottom-right" richColors />
       <div className="container mx-auto px-4 py-8">
         <Card>
           <CardHeader className="mb-6 flex flex-row items-center justify-between border-b pb-4">
@@ -614,7 +777,9 @@ function InventoryContent() {
                       <Select
                         value={sortCriteria}
                         onValueChange={(value) => {
-                          setSortCriteria(value as SortCriteria);
+                          const newSortCriteria = value as SortCriteria;
+                          console.log("Sort criteria changed to:", newSortCriteria); // Log state change
+                          setSortCriteria(newSortCriteria);
                           setSelectedItem(null);
                         }}
                       >
@@ -644,7 +809,7 @@ function InventoryContent() {
                           item={item}
                           onClick={() => handleInventorySelect(item)}
                           isSelected={
-                            selectedItem ? .inventoryId === item.inventoryId
+                            selectedItem?.inventoryId === item.inventoryId
                           }
                           isLoading={!!actionLoading[item.inventoryId]}
                         />
@@ -680,29 +845,29 @@ function InventoryContent() {
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                           <span className="text-2xl">
-                            {selectedItem.icon ? .includes("sword") ?
+                            {selectedItem?.icon?.includes("sword") ?
                               "⚔️" :
-                              selectedItem.icon ? .includes("head") ?
+                              selectedItem?.icon?.includes("head") ?
                               "👑" :
-                              selectedItem.icon ? .includes("potion") ?
+                              selectedItem?.icon?.includes("potion") ?
                               "🧪" :
-                              selectedItem.icon ? .includes("ear") ?
+                              selectedItem?.icon?.includes("ear") ?
                               "👂" :
                               "📦"}
                           </span>
-                          {selectedItem.name}
+                          {selectedItem?.name}
                           <span className="text-text-muted text-sm font-normal">
-                            ({selectedItem.rarity})
+                            ({selectedItem?.rarity})
                           </span>
-                          {selectedItem.quantity > 1 && (
+                          {selectedItem?.quantity > 1 && (
                             <span className="text-text-muted text-sm font-normal">
                               (x{selectedItem.quantity})
                             </span>
                           )}
                         </CardTitle>
                         <CardDescription>
-                          {selectedItem.type}
-                          {selectedItem.slot ?
+                          {selectedItem?.type}
+                          {selectedItem?.slot ?
                             ` - Slot: ${selectedItem.slot}` :
                             ""}
                         </CardDescription>

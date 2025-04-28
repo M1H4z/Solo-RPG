@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getUserSession } from "@/services/authService";
-import { calculateLevelFromExp } from "@/lib/utils";
+import { gainExperience } from "@/services/hunterService"; // Import the service function
 
 export const dynamic = "force-dynamic";
 
@@ -9,11 +8,10 @@ interface RouteContext {
   params: { hunterId: string };
 }
 
-// POST handler to add experience and handle level ups
+// POST handler to add experience using the service layer
 export async function POST(request: Request, context: RouteContext) {
   const { hunterId } = context.params;
   const session = await getUserSession();
-  const supabase = createSupabaseServerClient();
 
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -29,115 +27,54 @@ export async function POST(request: Request, context: RouteContext) {
   try {
     const body = await request.json();
     experienceGained = parseInt(body.experienceGained, 10);
-    if (isNaN(experienceGained) || experienceGained <= 0) {
-      throw new Error("Invalid experience amount.");
+    // Validate the amount (positive integer)
+    if (isNaN(experienceGained) || experienceGained <= 0 || !Number.isInteger(experienceGained)) {
+        throw new Error("Invalid or non-positive integer experience amount provided.");
     }
-  } catch (error) {
+  } catch (error: any) {
     return NextResponse.json(
       {
         error:
-          'Invalid request body. Expecting { "experienceGained": number }.',
+          error.message || 'Invalid request body. Expecting { "experienceGained": number }.',
       },
       { status: 400 },
     );
   }
 
-  const userId = session.user.id;
-
   try {
-    // --- 1. Fetch current hunter data ---
-    const { data: currentHunter, error: fetchError } = await supabase
-      .from("hunters")
-      .select("experience, stat_points, skill_points") // Select only needed fields
-      .eq("id", hunterId)
-      .eq("user_id", userId)
-      .single();
+    // Call the service function to handle the logic
+    const result = await gainExperience(hunterId, experienceGained);
 
-    if (fetchError) {
-      if (fetchError.code === "PGRST116") {
-        // Not found
-        return NextResponse.json(
-          { error: "Hunter not found or access denied" },
-          { status: 404 },
-        );
-      }
-      console.error("Gain EXP - Fetch Error:", fetchError);
-      throw new Error("Database error fetching hunter");
+    if (!result.success) {
+        // Determine appropriate status code based on error
+        let statusCode = 500;
+        if (result.error === "Unauthorized") {
+            statusCode = 401;
+        } else if (result.error?.includes("not found")) {
+            statusCode = 404;
+        } else if (result.error?.includes("required")) {
+            statusCode = 400;
+        }
+        return NextResponse.json({ error: result.error }, { status: statusCode });
     }
 
-    if (!currentHunter) {
-      return NextResponse.json(
-        { error: "Hunter not found or access denied" },
-        { status: 404 },
-      );
-    }
-
-    // --- 2. Calculate updates ---
-    const oldLevel = calculateLevelFromExp(currentHunter.experience ?? 0);
-    const newExperience = (currentHunter.experience ?? 0) + experienceGained;
-    const newLevel = calculateLevelFromExp(newExperience);
-
-    let statPointsGained = 0;
-    let skillPointsGained = 0;
-    let levelUpOccurred = false;
-
-    if (newLevel > oldLevel) {
-      levelUpOccurred = true;
-      const levelsGained = newLevel - oldLevel;
-      statPointsGained = levelsGained * 5;
-      skillPointsGained = levelsGained * 5;
-      console.log(
-        `Hunter ${hunterId} leveled up! ${oldLevel} -> ${newLevel}. Gained ${statPointsGained} stat points, ${skillPointsGained} skill points.`,
-      );
-      // TODO: Implement HP/MP recovery logic here if needed
-    }
-
-    const updatedData: {
-      experience: number;
-      stat_points: number;
-      skill_points: number;
-      level?: number; // Add level field conditionally
-    } = {
-      experience: newExperience,
-      stat_points: (currentHunter.stat_points ?? 0) + statPointsGained,
-      skill_points: (currentHunter.skill_points ?? 0) + skillPointsGained,
-      // updated_at: new Date().toISOString(), // Optional: update timestamp
-    };
-
-    // Conditionally add the level to the update object ONLY if it changed
-    // This avoids unnecessary writes if only EXP was gained without a level up.
-    if (levelUpOccurred) {
-      updatedData.level = newLevel;
-    }
-
-    // --- 3. Update hunter in DB ---
-    const { error: updateError } = await supabase
-      .from("hunters")
-      .update(updatedData) // Now includes level if it changed
-      .eq("id", hunterId)
-      .eq("user_id", userId);
-
-    if (updateError) {
-      console.error("Gain EXP - Update Error:", updateError);
-      throw new Error("Database error updating hunter");
-    }
-
-    // --- 4. Return success response ---
+    // Return the successful response from the service,
+    // including the updated hunter and level up details
     return NextResponse.json({
-      message: `Gained ${experienceGained} EXP.`,
-      levelUp: levelUpOccurred,
-      newLevel: newLevel,
-      levelsGained: newLevel - oldLevel,
-      statPointsGained,
-      skillPointsGained,
-      newTotalExperience: newExperience,
-      newTotalStatPoints: updatedData.stat_points,
-      newTotalSkillPoints: updatedData.skill_points,
-    });
+        message: result.message,
+        updatedHunter: result.updatedHunter, // Crucial part!
+        levelUp: result.levelUp,
+        newLevel: result.newLevel,
+        levelsGained: result.levelsGained,
+        statPointsGained: result.statPointsGained,
+        skillPointsGained: result.skillPointsGained,
+    }, { status: 200 });
+
   } catch (error: any) {
+    // Catch unexpected errors during service call or response handling
     console.error(`API Error gaining EXP for hunter ${hunterId}:`, error);
     return NextResponse.json(
-      { error: error.message || "Failed to process experience gain" },
+      { error: error.message || "Failed to process experience gain due to an unexpected server error." },
       { status: 500 },
     );
   }

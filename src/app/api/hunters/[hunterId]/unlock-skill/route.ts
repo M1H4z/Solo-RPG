@@ -64,10 +64,11 @@ export async function POST(
     }
 
     console.log(`[API /unlock-skill] Success: ${result.message}`);
-    // Return success message only, no hunter data
+    // Return success message AND updated hunter data
     return NextResponse.json({
       success: true,
       message: result.message,
+      hunter: result.updatedHunter,
     });
   } catch (error: any) {
     console.error(
