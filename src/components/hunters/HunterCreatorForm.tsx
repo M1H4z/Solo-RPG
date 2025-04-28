@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { HUNTER_CLASSES } from "@/constants/classes";
 import type { HunterClass, ClassDefinition } from "@/constants/classes";
+import { classIcons } from "@/constants/icons";
 import {
   Card,
   CardContent,
@@ -14,27 +15,6 @@ import {
   CardTitle,
 } from "@/components/ui/Card";
 import { cn } from "@/lib/utils";
-
-// Placeholder Icons (Replace with actual SVGs/components later)
-const PlaceholderIcon = ({ className }: { className?: string }) => (
-  <svg
-    className={cn("w-8 h-8 mb-2 text-secondary", className)}
-    fill="currentColor"
-    viewBox="0 0 20 20"
-  >
-    <path d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-2a6 6 0 100-12 6 6 0 000 12zm-1-7h2v4h-2v-4zm0-2h2V5h-2v2z" />
-  </svg>
-);
-
-// Simple mapping for demo - ideally import real icons
-const classIcons: { [key in HunterClass]?: React.ReactNode } = {
-  Fighter: <PlaceholderIcon />, // Replace with Fighter icon
-  Mage: <PlaceholderIcon />, // Replace with Mage icon
-  Assassin: <PlaceholderIcon />, // Replace with Assassin icon
-  Ranger: <PlaceholderIcon />, // Replace with Ranger icon
-  Healer: <PlaceholderIcon />, // Replace with Healer icon
-  Tanker: <PlaceholderIcon />, // Replace with Tanker icon
-};
 
 export function HunterCreatorForm() {
   const router = useRouter();
@@ -146,8 +126,8 @@ export function HunterCreatorForm() {
                       : "border-border-dark hover:border-border-light",
                   )}
                 >
-                  <div className="flex justify-center">
-                    {classIcons[key as HunterClass] || <PlaceholderIcon />}
+                  <div className="flex justify-center mb-2">
+                    {classIcons[key as HunterClass]}
                   </div>
                   <h4 className="mb-1 text-lg font-semibold text-text-primary">
                     {classInfo.name}

@@ -2,8 +2,8 @@
 
 import { redirect, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useState, Suspense } from "react"; // Import Suspense
-import { Hunter } from "@/types/hunter.types";
+import { useEffect, useState, Suspense, useCallback } from "react"; // Import useCallback
+import { Hunter, AllocatableStat } from "@/types/hunter.types"; // Import AllocatableStat
 import {
   Card,
   CardContent,
@@ -14,14 +14,10 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Toaster, toast } from "sonner"; // Import sonner
-
-// Define the type for the stats we can allocate points to
-type AllocatableStat =
-  |"strength"
-  |"agility"
-  |"perception"
-  |"intelligence"
-  |"vitality";
+import HunterStatsAllocator from "@/components/hunters/HunterStatsAllocator"; // Import the new component
+import { calculateDerivedStats } from "@/lib/stats"; // Import from lib/stats.ts
+import { Separator } from "@/components/ui/Separator"; // Import Separator
+import RealTimeClock from "@/components/ui/RealTimeClock"; // Removed .tsx
 
 // Define rank requirements (could be moved to constants later)
 const RANK_UP_REQUIREMENTS = {
@@ -36,20 +32,19 @@ const RANK_UP_REQUIREMENTS = {
 // This component fetches data and uses searchParams
 function DashboardContent() {
     const router = useRouter();
-    const searchParams = useSearchParams(); // Use hook here
-    const hunterId = searchParams.get("hunterId"); // Get hunterId from hook
+    const searchParams = useSearchParams();
+    const hunterId = searchParams.get("hunterId");
 
     const [hunter, setHunter] = useState<Hunter | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [expLoading, setExpLoading] = useState(false); // State for EXP button loading
-    const [allocationError, setAllocationError] = useState<string | null>(null); // Specific error for stat allocation
-    const [expToAdd, setExpToAdd] = useState<number>(100); // State for EXP amount
+    const [expLoading, setExpLoading] = useState(false);
+    const [allocationError, setAllocationError] = useState<string | null>(null);
+    const [expToAdd, setExpToAdd] = useState<number>(100);
 
-    // Refetch function (extracted for reuse)
-    async function fetchHunterData() {
-      if (!hunterId) return; // Guard against missing ID
-      // Reset errors on refetch
+    // Refetch function
+    const fetchHunterData = useCallback(async () => { // Wrap in useCallback
+      if (!hunterId) return;
       setError(null);
       setAllocationError(null);
       setLoading(true);
@@ -57,9 +52,6 @@ function DashboardContent() {
         const response = await fetch(`/api/hunters/${hunterId}`);
         if (!response.ok) {
           if (response.status === 404) {
-            console.log(
-              `Hunter ${hunterId} not found/access denied, redirecting.`,
-            );
             router.push("/hunters");
             return;
           }
@@ -71,23 +63,21 @@ function DashboardContent() {
       } catch (err: any) {
         console.error("Error loading hunter on dashboard:", err);
         setError(err.message || "Failed to load hunter data.");
-        setHunter(null); // Clear hunter data on error
+        setHunter(null);
       } finally {
         setLoading(false);
       }
-    }
+    }, [hunterId, router]); // Add dependencies
 
     // Initial fetch
     useEffect(() => {
       if (!hunterId) {
         setError("Hunter ID is missing.");
         setLoading(false);
-        // redirect? router.push('/hunters');
         return;
       }
       fetchHunterData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [hunterId, router]); // Rerun if hunterId changes
+    }, [hunterId, fetchHunterData]); // Use fetchHunterData here
 
     // --- Handler for gaining EXP ---
     const handleGainExp = async (amount: number) => {
@@ -221,13 +211,14 @@ function DashboardContent() {
       );
     }
 
-    // --- Main Dashboard Display ---
-    const hasStatPoints = (hunter.statPoints ?? 0) > 0;
+    // Calculate derived stats
+    const derivedStats = calculateDerivedStats(hunter);
+
+    // Extract values for easier use in JSX (copied from ProfileClientContent)
     const currentExp = hunter.experience ?? 0;
-    const startExpForCurrentLevel = hunter.currentLevelStartExp ?? 0;
-    const expNeededForLevelGain = hunter.expNeededForNextLevel ?? 1;
-    const expProgressInCurrentLevel = Math.max(0, currentExp - startExpForCurrentLevel);
-    const isMaxLevel = expNeededForLevelGain <= 0;
+    const expForLevelGain = derivedStats.expNeededForNextLevel ?? 1;
+    const expProgressInCurrentLevel = derivedStats.expProgressInCurrentLevel ?? 0;
+    const isMaxLevel = derivedStats.isMaxLevel ?? false;
 
     let isRankUpAvailable = false;
     let nextRank: string | null = null;
@@ -253,123 +244,60 @@ function DashboardContent() {
         <Toaster position="bottom-right" richColors />
         <div className="container mx-auto px-4 py-8 sm:py-12">
           <Card className="mb-6 sm:mb-8">
-            <CardHeader className="flex flex-col items-start justify-between sm:flex-row sm:items-center">
-              <div>
-                <CardTitle className="text-2xl font-bold tracking-wider text-text-primary sm:text-3xl">
-                  {hunter.name}
-                </CardTitle>
-                <CardDescription className="text-base sm:text-lg">
-                  Level {hunter.level} {hunter.class} - Rank {hunter.rank}
-                </CardDescription>
+            <CardHeader className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 py-3 sm:px-6">
+              <h1 className="text-xl font-bold text-text-primary sm:text-2xl">Dashboard</h1>
+              <div className="justify-self-center">
+                <RealTimeClock />
               </div>
-              <Button variant="link" className="mt-2 px-0 sm:mt-0" asChild>
-                <Link href="/hunters">&larr; Change Hunter</Link>
-              </Button>
+              <div className="justify-self-end">
+                <Button variant="link" className="px-0 text-sm" asChild>
+                  <Link href="/hunters">&larr; Change Hunter</Link>
+                </Button>
+              </div>
             </CardHeader>
           </Card>
 
           <div className="grid grid-cols-1 gap-6 sm:gap-8 lg:grid-cols-3">
             <Card className="lg:col-span-1">
               <CardHeader>
-                <CardTitle className="text-xl sm:text-2xl">Stats</CardTitle>
+                <CardTitle className="text-xl sm:text-2xl">Basic Info</CardTitle> 
               </CardHeader>
-              <CardContent>
-                <ul className="mb-4 space-y-2 text-sm sm:text-base">
-                  {(
-                    [
-                      "strength",
-                      "agility",
-                      "perception",
-                      "intelligence",
-                      "vitality",
-                    ] as AllocatableStat[]
-                  ).map((stat) => (
-                    <li key={stat} className="flex items-center justify-between">
-                      <span className="capitalize">
-                        {stat}:{" "}
-                        <span className="font-semibold text-accent">
-                          {hunter[stat]}
-                        </span>
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="size-6 border-primary/50 p-0 text-xs text-primary/80 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
-                        onClick={() => handleAllocateStat(stat)}
-                        disabled={!hasStatPoints || loading}
-                        aria-label={`Increase ${stat}`}
-                      >
-                        +
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-4 space-y-2 border-t border-border-dark pt-4">
-                  <div className="space-y-1">
-                    <p className="text-sm">
-                      Stat Points:{" "}
-                      <span
-                        className={`font-semibold ${hasStatPoints ? "text-primary" : "text-text-disabled"}`}
-                      >
-                        {hunter.statPoints ?? 0}
-                      </span>
-                    </p>
-                    <p className="text-sm">
-                      Skill Points:{" "}
-                      <span className="font-semibold text-secondary">
-                        {hunter.skillPoints ?? 0}
-                      </span>
-                    </p>
-                  </div>
-                  <div className="mt-4">
-                    <div className="mb-1 flex items-center justify-between text-xs">
-                      <span className="text-text-secondary">EXP</span>
-                      <span className="text-text-secondary">
-                        {isMaxLevel
-                          ? `MAX (${currentExp.toLocaleString()})`
-                          : `${expProgressInCurrentLevel.toLocaleString()} / ${expNeededForLevelGain.toLocaleString()}`}
-                      </span>
-                    </div>
-                    <progress
-                      className="[&::-webkit-progress-bar]:bg-background-secondary [&::-webkit-progress-value]:bg-accent-primary [&::-moz-progress-bar]:bg-accent-primary h-2 w-full [&::-webkit-progress-bar]:rounded-lg [&::-webkit-progress-value]:rounded-lg"
-                      value={isMaxLevel ? 1 : expProgressInCurrentLevel}
-                      max={isMaxLevel ? 1 : expNeededForLevelGain}
-                      aria-label={`Experience progress: ${isMaxLevel ? "Max Level" : `${expProgressInCurrentLevel} out of ${expNeededForLevelGain}`}`}
-                    />
+              <CardContent className="space-y-3 text-sm">
+                <div className="grid grid-cols-1 gap-y-2">
+                   <p>Name: <span className="font-semibold">{hunter.name}</span></p>
+                   <p>Level: <span className="font-semibold">{hunter.level}</span></p>
+                   <p>Class: <span className="font-semibold">{hunter.class}</span></p>
+                   <p>Rank: <span className="font-semibold">{hunter.rank}</span></p>
+                </div>
+                
+                <Separator />
+
+                <div>
+                  <p>HP: <span className="font-semibold">{derivedStats.currentHP} / {derivedStats.maxHP}</span></p>
+                  <div className="relative mt-1 h-2 w-full overflow-hidden rounded-full bg-secondary">
+                    <div className="h-full bg-green-500 transition-all duration-300 ease-out" style={{ width: `${((derivedStats.currentHP ?? 0) / (derivedStats.maxHP ?? 1)) * 100}%` }} />
                   </div>
                 </div>
-                <div className="mt-4 border-t border-border-dark pt-4">
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleAdjustExp(-100)}
-                      disabled={expLoading || expToAdd <= 100}
-                      aria-label="Decrease EXP amount by 100"
-                      className="px-2"
-                    >
-                      -
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleGainExp(expToAdd)}
-                      disabled={expLoading}
-                      className="flex-grow"
-                    >
-                      {expLoading ? "Gaining EXP..." : `Gain ${expToAdd} EXP (Test)`}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleAdjustExp(100)}
-                      disabled={expLoading}
-                      aria-label="Increase EXP amount by 100"
-                      className="px-2"
-                    >
-                      +
-                    </Button>
+                <div>
+                  <p>MP: <span className="font-semibold">{derivedStats.currentMP} / {derivedStats.maxMP}</span></p>
+                  <div className="relative mt-1 h-2 w-full overflow-hidden rounded-full bg-secondary">
+                    <div className="h-full bg-blue-500 transition-all duration-300 ease-out" style={{ width: `${((derivedStats.currentMP ?? 0) / (derivedStats.maxMP ?? 1)) * 100}%` }} />
                   </div>
+                </div>
+                <div>
+                  <p>EXP: <span className="font-semibold">
+                    {isMaxLevel ? `MAX (${currentExp.toLocaleString()})` : `${expProgressInCurrentLevel.toLocaleString()} / ${expForLevelGain.toLocaleString()}`}
+                  </span></p>
+                  <progress
+                    className="[&::-webkit-progress-bar]:bg-background-secondary [&::-webkit-progress-value]:bg-yellow-500 [&::-moz-progress-bar]:bg-yellow-500 h-2 w-full [&::-webkit-progress-bar]:rounded-lg [&::-webkit-progress-value]:rounded-lg mt-1"
+                    value={isMaxLevel ? expForLevelGain : expProgressInCurrentLevel} 
+                    max={expForLevelGain <= 0 ? 1 : expForLevelGain} 
+                    aria-label={`Experience progress: ${isMaxLevel ? "Max Level" : `${expProgressInCurrentLevel} out of ${expForLevelGain}`}`}
+                  />
+                </div>
+                <div className="mt-4 space-y-1 border-t border-border-dark pt-4">
+                  <p>Stat Points: <span className="font-semibold text-primary">{hunter.statPoints ?? 0}</span></p>
+                  <p>Skill Points: <span className="font-semibold text-secondary">{hunter.skillPoints ?? 0}</span></p>
                 </div>
               </CardContent>
             </Card>
@@ -399,14 +327,6 @@ function DashboardContent() {
                 </Button>
                 <Button variant="secondary" className="w-full" asChild>
                   <Link
-                    href={`/skills?hunterId=${hunterId}`}
-                    className="flex size-full items-center justify-center"
-                  >
-                    Skills
-                  </Link>
-                </Button>
-                <Button variant="secondary" className="w-full" asChild>
-                  <Link
                     href={`/inventory?hunterId=${hunterId}`}
                     className="flex size-full items-center justify-center"
                   >
@@ -421,6 +341,14 @@ function DashboardContent() {
                     Shop
                   </Link>
                 </Button>
+                <Button variant="secondary" className="w-full" asChild>
+                   <Link
+                     href={`/profile?hunterId=${hunterId}`}
+                     className="flex size-full items-center justify-center"
+                   >
+                     Profile
+                   </Link>
+                 </Button>
               </CardContent>
             </Card>
           </div>
@@ -429,4 +357,11 @@ function DashboardContent() {
     );
 }
 
-export default DashboardContent;
+// Wrap the component that uses searchParams with Suspense
+export default function DashboardClientContent() {
+  return (
+    <Suspense fallback={<div>Loading Dashboard...</div>}> {/* Add Fallback UI */}
+      <DashboardContent />
+    </Suspense>
+  );
+}

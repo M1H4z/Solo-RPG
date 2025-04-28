@@ -10,6 +10,7 @@ import { Hunter } from "@/types/hunter.types";
 import { HunterCard } from "@/components/hunters/HunterCard";
 import { Button } from "@/components/ui/Button"; // Import Button
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"; // Import Card
+import RealTimeClock from "@/components/ui/RealTimeClock"; // Import the clock component
 
 export default function HunterSelectionPage() {
   const router = useRouter();
@@ -82,25 +83,16 @@ export default function HunterSelectionPage() {
   const canCreateHunter = hunters.length < 2;
 
   return (
-    // Use main container styling
-    <div className="container mx-auto flex justify-center px-4 py-8 sm:py-12">
+    <div className="container mx-auto flex flex-col items-center justify-center px-4 py-8 sm:py-12">
       {/* Use themed Card for the main content */}
       <Card className="relative w-full max-w-2xl">
-        {/* Use themed Button for Sign Out */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleSignOut}
-          disabled={isSigningOut}
-          className="absolute right-3 top-3 h-auto px-2 py-1 text-text-secondary hover:bg-danger/10 hover:text-danger"
-        >
-          {isSigningOut ? "Signing Out..." : "Sign Out"}
-        </Button>
-
         <CardHeader>
           <CardTitle className="text-center text-2xl sm:text-3xl">
             Select Your Hunter
           </CardTitle>
+          <div className="mt-2 flex justify-center">
+            <RealTimeClock />
+          </div>
         </CardHeader>
 
         <CardContent>
@@ -153,6 +145,16 @@ export default function HunterSelectionPage() {
               </p>
             )
           )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSignOut}
+            disabled={isSigningOut}
+            className="mt-6 w-full h-auto px-4 py-2 text-text-secondary hover:bg-danger/10 hover:text-danger"
+          >
+            {isSigningOut ? "Signing Out..." : "Sign Out"}
+          </Button>
         </CardContent>
       </Card>
     </div>

@@ -75,6 +75,7 @@ import {
   DragOverlay,
   DragStartEvent,
 } from "@dnd-kit/core";
+import RealTimeClock from "@/components/ui/RealTimeClock";
 
 // Define possible item types for filtering (including 'All')
 const itemTypesForFilter: ("All" | ItemType)[] = [
@@ -712,304 +713,303 @@ function InventoryContent() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <Toaster position="bottom-right" richColors />
-      <div className="container mx-auto px-4 py-8">
-        <Card>
-          <CardHeader className="mb-6 flex flex-row items-center justify-between border-b pb-4">
-            <div>
-              <CardTitle className="text-2xl sm:text-3xl">Inventory</CardTitle>
-            </div>
-            <Button variant="outline" asChild>
-              <Link href={`/dashboard?hunterId=${hunterId}`}>
-                &larr; Back to Dashboard
-              </Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {" "}
-            {error && (
-              <p className="my-4 rounded border border-danger bg-danger/10 p-2 text-center text-danger">
-                Error: {error}
-              </p>
-            )}
-            <div className="mb-6">
-              <Button
-                onClick={handleAddItem}
-                disabled={actionLoading["add-item"]}
-              >
-                {actionLoading["add-item"]
-                  ? "Adding..."
-                  : "Add Random Item (Test)"}
-              </Button>
-            </div>
-            <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-              <div className="lg:col-span-1">
-                <EquipmentDisplay
-                  equipment={equipment}
-                  onUnequip={handleUnequipItem}
-                  onSelect={handleEquipmentSelect} // Pass the new handler
-                  isLoading={actionLoading}
-                />
-              </div>
-              <div className="space-y-6 lg:col-span-2">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Items ({displayedInventory.length})</CardTitle>
-                    <div className="mt-4 flex flex-wrap gap-4">
-                      <Select
-                        value={filterType}
-                        onValueChange={(value) => {
-                          setFilterType(value as "All" | ItemType);
-                          setSelectedItem(null);
-                        }}
-                      >
-                        <SelectTrigger className="w-full sm:w-[180px]">
-                          <SelectValue placeholder="Filter by Type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {itemTypesForFilter.map((type) => (
-                            <SelectItem key={type} value={type}>
-                              {type}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Select
-                        value={sortCriteria}
-                        onValueChange={(value) => {
-                          const newSortCriteria = value as SortCriteria;
-                          console.log("Sort criteria changed to:", newSortCriteria); // Log state change
-                          setSortCriteria(newSortCriteria);
-                          setSelectedItem(null);
-                        }}
-                      >
-                        <SelectTrigger className="w-full sm:w-[180px]">
-                          <SelectValue placeholder="Sort By" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="rarity_desc">
-                            Rarity (Desc)
-                          </SelectItem>
-                          <SelectItem value="rarity_asc">
-                            Rarity (Asc)
-                          </SelectItem>
-                          <SelectItem value="name_asc">Name (A-Z)</SelectItem>
-                          <SelectItem value="name_desc">Name (Z-A)</SelectItem>
-                          <SelectItem value="type_asc">Type (A-Z)</SelectItem>
-                          <SelectItem value="type_desc">Type (Z-A)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-6 gap-2 sm:grid-cols-8 md:grid-cols-10">
-                      {displayedInventory.map((item) => (
-                        <InventoryIconSlot
-                          key={item.inventoryId}
-                          item={item}
-                          onClick={() => handleInventorySelect(item)}
-                          isSelected={
-                            selectedItem?.inventoryId === item.inventoryId
-                          }
-                          isLoading={!!actionLoading[item.inventoryId]}
-                          isDragging={activeDragItem?.inventoryId === item.inventoryId}
-                        />
-                      ))}
-                    </div>
-                    {displayedInventory.length === 0 && (
-                      <p className="py-6 text-center italic text-text-disabled">
-                        {inventory.filter(
-                          (item) =>
-                          !new Set(
-                            Object.values(equipment)
-                            .filter((i) => i)
-                            .map((i) => i!.inventoryId),
-                          ).has(item.inventoryId),
-                        ).length === 0
-                          ? "Your inventory is empty."
-                          : `No items match the current filters.`}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
+      <TooltipProvider>
+        <Toaster position="bottom-right" richColors />
 
-                <Card
-                  className={cn(
-                    "transition-opacity duration-300",
-                    selectedItem ?
-                    "opacity-100" :
-                    "opacity-0 h-0 overflow-hidden pointer-events-none",
-                  )}
-                >
-                  {selectedItem && (
-                    <>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <span className="text-2xl">
-                            {selectedItem?.icon?.includes("sword") ?
-                              "⚔️" :
-                              selectedItem?.icon?.includes("head") ?
-                              "👑" :
-                              selectedItem?.icon?.includes("potion") ?
-                              "🧪" :
-                              selectedItem?.icon?.includes("ear") ?
-                              "👂" :
-                              "📦"}
-                          </span>
-                          {selectedItem?.name}
-                          <span className="text-text-muted text-sm font-normal">
-                            ({selectedItem?.rarity})
-                          </span>
-                          {selectedItem?.quantity > 1 && (
-                            <span className="text-text-muted text-sm font-normal">
-                              (x{selectedItem.quantity})
-                            </span>
-                          )}
-                        </CardTitle>
-                        <CardDescription>
-                          {selectedItem?.type}
-                          {selectedItem?.slot ?
-                            ` - Slot: ${selectedItem.slot}` :
-                            ""}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-3 text-sm">
-                        <p>{selectedItem.description}</p>
-                        {selectedItem.stats && (
-                          <div>
-                            <h4 className="mb-1 font-semibold">Stats:</h4>
-                            <ul className="list-inside list-disc space-y-0.5 text-xs">
-                              {Object.entries(selectedItem.stats).map(
-                                ([stat, value]) => (
-                                  <li key={stat}>
-                                    <span className="font-medium capitalize">
-                                      {stat}:
-                                    </span>{" "}
-                                    +{value}
-                                  </li>
-                                ),
-                              )}
-                            </ul>
-                          </div>
-                        )}
-                      </CardContent>
-                      <Separator className="my-3" />
-                      <CardContent className="flex flex-wrap gap-2">
-                        {!isSelectedItemEquipped && selectedItem.slot && (
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() =>
-                              handleEquipItem(selectedItem.inventoryId)
-                            }
-                            disabled={!!actionLoading[selectedItem.inventoryId]}
-                            aria-label={`Equip ${selectedItem.name}`}
-                          >
-                            Equip
-                          </Button>
-                        )}
-
-                        {isSelectedItemEquipped && selectedItem.slot && (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() =>
-                              handleUnequipItem(selectedItem.slot!)
-                            }
-                            disabled={
-                              !!actionLoading[selectedItem.inventoryId] ||
-                              !!actionLoading[selectedItem.slot!]
-                            }
-                            aria-label={`Unequip ${selectedItem.name}`}
-                          >
-                            Unequip
-                          </Button>
-                        )}
-
-                        {selectedItem.type === "Consumable" && (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            className="bg-purple-600 text-white hover:bg-purple-700"
-                            disabled={!!actionLoading[selectedItem.inventoryId]}
-                            onClick={() =>
-                              handleUseItem(selectedItem.inventoryId)
-                            }
-                            aria-label={`Use ${selectedItem.name}`}
-                          >
-                            Use
-                          </Button>
-                        )}
-
-                        <TooltipProvider delayDuration={100}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span tabIndex={isSelectedItemEquipped ? -1 : 0}>
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() =>
-                                    !isSelectedItemEquipped &&
-                                    handleDropItem(
-                                      selectedItem.inventoryId,
-                                      selectedItem.name,
-                                    )
-                                  }
-                                  disabled={
-                                    !!actionLoading[selectedItem.inventoryId] ||
-                                    isSelectedItemEquipped
-                                  }
-                                  aria-disabled={isSelectedItemEquipped}
-                                  aria-label={
-                                    isSelectedItemEquipped ?
-                                    `Cannot drop equipped item: ${selectedItem.name}` :
-                                    `Drop ${selectedItem.name}`
-                                  }
-                                  className={cn(
-                                    isSelectedItemEquipped ?
-                                    "cursor-not-allowed pointer-events-none" :
-                                    "",
-                                  )}
+        <div className="container mx-auto px-4 py-8 sm:py-12">
+            <Card className="mb-6 sm:mb-8">
+              <CardHeader className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 py-3 sm:px-6">
+                <h1 className="text-xl font-bold text-text-primary sm:text-2xl">Inventory</h1>
+                <div className="justify-self-center">
+                    <RealTimeClock />
+                </div>
+                <div className="justify-self-end">
+                    <Button variant="link" className="px-0 text-sm" asChild>
+                      <Link href={`/dashboard?hunterId=${hunterId}`}>&larr; Back to Dashboard</Link>
+                    </Button>
+                </div>
+              </CardHeader>
+            </Card>
+    
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3"> 
+                <div className="lg:col-span-1">
+                    <EquipmentDisplay
+                        equipment={equipment}
+                        onUnequip={handleUnequipItem}
+                        onSelect={handleEquipmentSelect}
+                        isLoading={actionLoading}
+                    />
+                </div>
+                <div className="space-y-6 lg:col-span-2">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Items ({displayedInventory.length})</CardTitle>
+                            <div className="mt-4 flex flex-wrap gap-4">
+                                <Select
+                                    value={filterType}
+                                    onValueChange={(value) => {
+                                        setFilterType(value as "All" | ItemType);
+                                        setSelectedItem(null);
+                                    }}
                                 >
-                                  Drop
+                                    <SelectTrigger className="w-full sm:w-[180px]">
+                                        <SelectValue placeholder="Filter by Type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {itemTypesForFilter.map((type) => (
+                                            <SelectItem key={type} value={type}>
+                                                {type}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Select
+                                    value={sortCriteria}
+                                    onValueChange={(value) => {
+                                        const newSortCriteria = value as SortCriteria;
+                                        console.log("Sort criteria changed to:", newSortCriteria);
+                                        setSortCriteria(newSortCriteria);
+                                        setSelectedItem(null);
+                                    }}
+                                >
+                                    <SelectTrigger className="w-full sm:w-[180px]">
+                                        <SelectValue placeholder="Sort By" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="rarity_desc">
+                                            Rarity (Desc)
+                                        </SelectItem>
+                                        <SelectItem value="rarity_asc">
+                                            Rarity (Asc)
+                                        </SelectItem>
+                                        <SelectItem value="name_asc">Name (A-Z)</SelectItem>
+                                        <SelectItem value="name_desc">Name (Z-A)</SelectItem>
+                                        <SelectItem value="type_asc">Type (A-Z)</SelectItem>
+                                        <SelectItem value="type_desc">Type (Z-A)</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="mt-4 border-t border-border-dark pt-4">
+                                <Button
+                                    onClick={handleAddItem}
+                                    disabled={!!actionLoading["add-item"]}
+                                    variant="secondary"
+                                    size="sm"
+                                >
+                                    {actionLoading["add-item"]
+                                    ? "Adding..."
+                                    : "Add Random Item (Test)"}
                                 </Button>
-                              </span>
-                            </TooltipTrigger>
-                            {isSelectedItemEquipped && (
-                              <TooltipContent side="bottom">
-                                <p>Cannot drop an equipped item.</p>
-                              </TooltipContent>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-6 gap-2 sm:grid-cols-8 md:grid-cols-10">
+                                {displayedInventory.map((item) => (
+                                    <InventoryIconSlot
+                                        key={item.inventoryId}
+                                        item={item}
+                                        onClick={() => handleInventorySelect(item)}
+                                        isSelected={
+                                            selectedItem?.inventoryId === item.inventoryId
+                                        }
+                                        isLoading={!!actionLoading[item.inventoryId]}
+                                        isDragging={activeDragItem?.inventoryId === item.inventoryId}
+                                    />
+                                ))}
+                            </div>
+                            {displayedInventory.length === 0 && (
+                                <p className="py-6 text-center italic text-text-disabled">
+                                    {inventory.filter(
+                                        (item) =>
+                                        !new Set(
+                                            Object.values(equipment)
+                                            .filter((i) => i)
+                                            .map((i) => i!.inventoryId),
+                                        ).has(item.inventoryId),
+                                    ).length === 0
+                                        ? "Your inventory is empty."
+                                        : `No items match the current filters.`}
+                                </p>
                             )}
-                          </Tooltip>
-                        </TooltipProvider>
+                        </CardContent>
+                    </Card>
 
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={closeDetailsPanel}
-                        >
-                          Close
-                        </Button>
-                      </CardContent>
-                    </>
-                  )}
-                </Card>
-              </div>
+                    <Card
+                        className={cn(
+                            "transition-opacity duration-300",
+                            selectedItem ?
+                            "opacity-100" :
+                            "opacity-0 h-0 overflow-hidden pointer-events-none",
+                        )}
+                    >
+                        {selectedItem && (
+                            <>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <span className="text-2xl">
+                                            {selectedItem?.icon?.includes("sword") ?
+                                                "⚔️" :
+                                                selectedItem?.icon?.includes("head") ?
+                                                "👑" :
+                                                selectedItem?.icon?.includes("potion") ?
+                                                "🧪" :
+                                                selectedItem?.icon?.includes("ear") ?
+                                                "👂" :
+                                                "📦"}
+                                        </span>
+                                        {selectedItem?.name}
+                                        <span className="text-text-muted text-sm font-normal">
+                                            ({selectedItem?.rarity})
+                                        </span>
+                                        {selectedItem?.quantity > 1 && (
+                                            <span className="text-text-muted text-sm font-normal">
+                                                (x{selectedItem.quantity})
+                                            </span>
+                                        )}
+                                    </CardTitle>
+                                    <CardDescription>
+                                        {selectedItem?.type}
+                                        {selectedItem?.slot ?
+                                            ` - Slot: ${selectedItem.slot}` :
+                                            ""}
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-3 text-sm">
+                                    <p>{selectedItem.description}</p>
+                                    {selectedItem.stats && (
+                                        <div>
+                                            <h4 className="mb-1 font-semibold">Stats:</h4>
+                                            <ul className="list-inside list-disc space-y-0.5 text-xs">
+                                                {Object.entries(selectedItem.stats).map(
+                                                    ([stat, value]) => (
+                                                        <li key={stat}>
+                                                            <span className="font-medium capitalize">
+                                                                {stat}:
+                                                            </span>{" "}
+                                                            +{value}
+                                                        </li>
+                                                    ),
+                                                )}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </CardContent>
+                                <Separator className="my-3" />
+                                <CardContent className="flex flex-wrap gap-2">
+                                    {!isSelectedItemEquipped && selectedItem.slot && (
+                                        <Button
+                                            variant="default"
+                                            size="sm"
+                                            onClick={() =>
+                                                handleEquipItem(selectedItem.inventoryId)
+                                            }
+                                            disabled={!!actionLoading[selectedItem.inventoryId]}
+                                            aria-label={`Equip ${selectedItem.name}`}
+                                        >
+                                            Equip
+                                        </Button>
+                                    )}
+
+                                    {isSelectedItemEquipped && selectedItem.slot && (
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            onClick={() =>
+                                                handleUnequipItem(selectedItem.slot!)
+                                            }
+                                            disabled={
+                                                !!actionLoading[selectedItem.inventoryId] ||
+                                                !!actionLoading[selectedItem.slot!]
+                                            }
+                                            aria-label={`Unequip ${selectedItem.name}`}
+                                        >
+                                            Unequip
+                                        </Button>
+                                    )}
+
+                                    {selectedItem.type === "Consumable" && (
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            className="bg-purple-600 text-white hover:bg-purple-700"
+                                            disabled={!!actionLoading[selectedItem.inventoryId]}
+                                            onClick={() =>
+                                                handleUseItem(selectedItem.inventoryId)
+                                            }
+                                            aria-label={`Use ${selectedItem.name}`}
+                                        >
+                                            Use
+                                        </Button>
+                                    )}
+
+                                    <TooltipProvider delayDuration={100}>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <span tabIndex={isSelectedItemEquipped ? -1 : 0}>
+                                                    <Button
+                                                        variant="destructive"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            !isSelectedItemEquipped &&
+                                                            handleDropItem(
+                                                                selectedItem.inventoryId,
+                                                                selectedItem.name,
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            !!actionLoading[selectedItem.inventoryId] ||
+                                                            isSelectedItemEquipped
+                                                        }
+                                                        aria-disabled={isSelectedItemEquipped}
+                                                        aria-label={
+                                                            isSelectedItemEquipped ?
+                                                            `Cannot drop equipped item: ${selectedItem.name}` :
+                                                            `Drop ${selectedItem.name}`
+                                                        }
+                                                        className={cn(
+                                                            isSelectedItemEquipped ?
+                                                            "cursor-not-allowed pointer-events-none" :
+                                                            "",
+                                                        )}
+                                                    >
+                                                        Drop
+                                                    </Button>
+                                                </span>
+                                            </TooltipTrigger>
+                                            {isSelectedItemEquipped && (
+                                                <TooltipContent side="bottom">
+                                                    <p>Cannot drop an equipped item.</p>
+                                                </TooltipContent>
+                                            )}
+                                        </Tooltip>
+                                    </TooltipProvider>
+
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={closeDetailsPanel}
+                                    >
+                                        Close
+                                    </Button>
+                                </CardContent>
+                            </>
+                        )}
+                    </Card>
+                </div>
             </div>
-          </CardContent>
-        </Card>
+        </div>
 
         <DragOverlay dropAnimation={null}>
-          {activeDragItem ? (
-            <InventoryIconSlot
-              item={activeDragItem}
-              isSelected={false}
-              isLoading={false}
-              onClick={() => {}}
-            />
-          ) : null}
+            {activeDragItem ? (
+                <InventoryIconSlot
+                    item={activeDragItem}
+                    isSelected={false}
+                    isLoading={false}
+                    onClick={() => {}}
+                />
+            ) : null}
         </DragOverlay>
-      </div>
+      </TooltipProvider>
     </DndContext>
   );
 }
@@ -1017,7 +1017,7 @@ function InventoryContent() {
 // Export the component wrapped in Suspense
 export default function InventoryClientContent() {
   return (
-    <Suspense fallback={<div>Loading inventory...</div>}>
+    <Suspense fallback={<div>Loading Inventory...</div>}>
       <InventoryContent />
     </Suspense>
   );
