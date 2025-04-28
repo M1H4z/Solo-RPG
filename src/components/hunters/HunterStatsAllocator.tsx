@@ -71,22 +71,6 @@ export const HunterStatsAllocator: React.FC<HunterStatsAllocatorProps> = ({
   if (!hunter) return null;
 
   const hasStatPoints = (hunter.statPoints ?? 0) > 0;
-  const canAllocateTen = (hunter.statPoints ?? 0) >= 10;
-
-  // Placeholder handlers - NEED CLARIFICATION
-  const handleReset = (stat: AllocatableStat) => {
-    console.warn("Reset functionality not implemented for", stat);
-  };
-  const handleDeallocate = (stat: AllocatableStat) => {
-    console.warn("Deallocate functionality not implemented for", stat);
-  };
-   const handleAllocateTen = (stat: AllocatableStat) => {
-    console.warn("Allocate +10 functionality not implemented for", stat);
-    // Example: Call onAllocateStat 10 times (needs careful implementation)
-    // if (canAllocateTen) {
-    //   for (let i = 0; i < 10; i++) { onAllocateStat(stat); } 
-    // }
-  };
 
   return (
     // Use grid for layout: Chart on left, Stats on right
@@ -97,88 +81,69 @@ export const HunterStatsAllocator: React.FC<HunterStatsAllocatorProps> = ({
       </div>
 
       {/* Right Column: Stat Allocation Rows */}
-      <div className="space-y-1 border border-border-dark rounded p-2">
+      <div className="space-y-4 border border-border-dark rounded p-2">
+        {/* Use space-y for vertical stacking on mobile, map over stats */}
         {primaryStatOrder.map((statKey) => (
           <div
             key={statKey}
-            className="grid grid-cols-[1fr,auto,auto,auto,auto,auto,auto,auto] items-start gap-x-2 md:gap-x-3 py-1.5 text-xs md:text-sm border-b border-border-dark last:border-b-0"
+            // New 7-col layout: Name, Spacer, Spacer, DerivedName, DerivedValue, Value, Plus
+            className="flex flex-col md:grid md:grid-cols-[1fr,1fr,1fr,auto,auto,auto,auto] md:items-center md:gap-x-3 py-2 border-b border-border-dark last:border-b-0"
           >
-            {/* Col 1: Primary Stat Name */}
-            <div className="font-semibold capitalize text-accent pt-px">
-              {statKey}
+            {/* Section 1: Stat Name (Col 1) and Derived Stats (Mobile only) */}
+            {/* Col 1 */} 
+            <div className="flex w-full items-start justify-between md:block md:w-auto md:col-span-1">
+               {/* Primary Stat Name */}
+               <div className="font-semibold capitalize text-accent text-sm md:text-base">{statKey}</div>
+               {/* Derived Stats (Mobile) */}
+               <div className="flex flex-col items-end text-right md:hidden"> {/* Mobile: Show derived stats on the right */}
+                {statMappings[statKey].map((derived) => (
+                   <div key={`${derived.key}-mobile`} className="text-xs leading-tight">
+                       <span className="text-text-secondary">{derived.name}: </span>
+                       <span className="font-medium">{derivedStats[derived.key] ?? "-"}{derived.suffix}</span>
+                   </div>
+                ))}
+              </div>
             </div>
 
-            {/* Col 2: Derived Stat Names */}
-            <div className="flex flex-col text-left text-text-secondary min-w-[6rem]">
-              {statMappings[statKey].map((derived) => (
-                <span key={derived.key} className="leading-tight">{derived.name}</span>
-              ))}
+            {/* Col 4: Derived Names (Desktop) */}
+            <div className="hidden md:flex md:col-start-4 md:flex-col md:text-left md:text-text-secondary md:min-w-[6rem]">
+                 {statMappings[statKey].map((derived) => (
+                   <span key={`${derived.key}-d-name`} className="leading-tight text-xs">{derived.name}</span>
+                 ))}
+            </div>
+            {/* Col 5: Derived Values (Desktop) */}
+            <div className="hidden md:flex md:col-start-5 md:flex-col md:text-right md:font-medium md:min-w-[3.5rem]">
+                {statMappings[statKey].map((derived) => (
+                   <span key={`${derived.key}-d-value`} className="leading-tight text-xs">{derivedStats[derived.key] ?? "-"}{derived.suffix}</span>
+                ))}
             </div>
 
-            {/* Col 3: Derived Stat Values */}
-            <div className="flex flex-col text-right font-medium min-w-[3.5rem]">
-              {statMappings[statKey].map((derived) => (
-                <span key={derived.key} className="leading-tight">
-                  {derivedStats[derived.key] ?? "-"}{derived.suffix}
-                </span>
-              ))}
+            {/* Section 2: Controls (Mobile: centered below; Desktop: cols 6 & 7) */}
+            {/* Mobile controls */}
+            <div className="mt-2 flex w-full items-center justify-center space-x-4 md:hidden">
+               {/* Primary Stat Value */}
+               <div className="text-center font-bold text-base text-primary min-w-[2rem]">
+                 {hunter[statKey]}
+               </div>
+               {/* Plus Button */}
+               <Button variant="outline" size="icon" className="size-8 p-0 disabled:opacity-50" onClick={() => onAllocateStat(statKey)} disabled={!hasStatPoints || loading} aria-label={`Increase ${statKey}`}>+</Button>
             </div>
-
-            {/* Col 4: Reset Button (Placeholder) */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-6 text-text-muted hover:text-text-primary disabled:opacity-50"
-              onClick={() => handleReset(statKey)}
-              disabled={true} // Needs implementation
-              aria-label={`Reset ${statKey} allocation`}
-            >
-              🔄
-            </Button>
-
-            {/* Col 5: Minus Button (Placeholder) */}
-            <Button
-              variant="outline"
-              size="icon"
-               className="size-6 p-0 disabled:opacity-50"
-              onClick={() => handleDeallocate(statKey)}
-              disabled={true} // Needs implementation
-               aria-label={`Decrease ${statKey}`}
-           >
-              -
-            </Button>
-
-            {/* Col 6: Primary Stat Value */}
-            <div className="text-center font-bold text-lg text-primary">
-              {hunter[statKey]}
+            
+            {/* Desktop controls (Cols 6 & 7) - Now using individual column divs */}
+            {/* Col 6: Value */}
+            <div className="hidden md:flex md:col-start-6 md:justify-center md:items-center">
+               <div className="text-center font-bold text-lg text-primary min-w-[2rem]">
+                 {hunter[statKey]}
+               </div>
             </div>
-
             {/* Col 7: Plus Button */}
-            <Button
-              variant="outline"
-              size="icon"
-              className="size-6 p-0 disabled:opacity-50"
-              onClick={() => onAllocateStat(statKey)}
-              disabled={!hasStatPoints || loading}
-              aria-label={`Increase ${statKey}`}
-            >
-              +
-            </Button>
-
-            {/* Col 8: Plus 10 Button (Placeholder) */}
-            <Button
-              variant="outline"
-              size="sm"
-              className="px-1.5 h-6 text-xs disabled:opacity-50"
-              onClick={() => handleAllocateTen(statKey)}
-              disabled={!canAllocateTen || loading} // Needs implementation detail
-              aria-label={`Increase ${statKey} by 10`}
-            >
-              +10
-            </Button>
+            <div className="hidden md:flex md:col-start-7 md:justify-center md:items-center">
+               <Button variant="outline" size="icon" className="size-6 p-0 disabled:opacity-50" onClick={() => onAllocateStat(statKey)} disabled={!hasStatPoints || loading} aria-label={`Increase ${statKey}`}>+</Button>
+            </div>
           </div>
         ))}
-        <div className="pt-3 text-right font-semibold">
+        {/* Stat Points Available Footer */}
+        <div className="p-1 text-right font-semibold text-sm">
           Stat Points Available:{" "}
           <span className="text-primary">{hunter.statPoints ?? 0}</span>
         </div>
