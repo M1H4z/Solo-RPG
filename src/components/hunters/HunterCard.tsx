@@ -3,19 +3,21 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation"; // Import useRouter
 import { Hunter } from "@/types/hunter.types";
+import { HunterClass } from "@/constants/classes"; // Import HunterClass type
+import { classIcons } from "@/constants/icons"; // Import icons
 import { Button } from "@/components/ui/Button"; // Import themed Button
 import { Card, CardContent } from "@/components/ui/Card"; // Import themed Card components
 import { cn } from "@/lib/utils"; // Import cn
+import { toast } from "sonner";
 
 interface HunterCardProps {
   hunter: Hunter;
-  onDelete?: (hunterId: string) => void; // Callback to notify parent of deletion
+  onDelete: (hunterId: string) => void; // Callback to notify parent of deletion
 }
 
 export const HunterCard: React.FC<HunterCardProps> = ({ hunter, onDelete }) => {
   const router = useRouter();
   const [isDeleting, setIsDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const handleSelect = () => {
     console.log("Selected hunter:", hunter.id);
@@ -24,61 +26,55 @@ export const HunterCard: React.FC<HunterCardProps> = ({ hunter, onDelete }) => {
   };
 
   const handleDelete = async () => {
-    setError(null); // Clear previous errors
-    // Confirmation dialog
-    if (
-      !window.confirm(
-        `Are you sure you want to delete ${hunter.name}? This action cannot be undone.`,
-      )
-    ) {
-      return;
-    }
-
-    setIsDeleting(true);
-    try {
-      const response = await fetch(`/api/hunters/${hunter.id}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok && response.status !== 204) {
-        // Try to parse error message from response if possible
-        let errorMsg = "Failed to delete hunter.";
-        try {
-          const result = await response.json();
-          errorMsg = result.error || errorMsg;
-        } catch (_) {
-          // Ignore if response is not JSON or empty (like for 204)
-        }
-        throw new Error(errorMsg);
-      } else {
-        // Handle 204 No Content specifically as success
-        console.log("Hunter deleted successfully");
-        if (onDelete) {
-          onDelete(hunter.id); // Notify parent component
-        }
-        // Optionally trigger a refresh or update UI directly
+    toast.warning(
+      `Are you sure you want to delete ${hunter.name}? This action cannot be undone.`,
+      {
+        action: {
+          label: "Confirm Delete",
+          onClick: async () => {
+            setIsDeleting(true);
+            try {
+              const response = await fetch(`/api/hunters/${hunter.id}/delete`, {
+                method: "DELETE",
+              });
+              const result = await response.json();
+              if (!response.ok) {
+                throw new Error(result.error || "Failed to delete hunter.");
+              }
+              toast.success(`${hunter.name} deleted successfully.`);
+              onDelete(hunter.id);
+            } catch (err: any) {
+              console.error("Error deleting hunter:", err);
+              toast.error(`Error deleting hunter: ${err.message}`);
+            } finally {
+              setIsDeleting(false);
+            }
+          },
+        },
+        cancel: {
+          label: "Cancel",
+          onClick: () => { /* Do nothing */ }
+        },
+        duration: 10000,
       }
-    } catch (err: any) {
-      console.error("Delete hunter failed:", err);
-      setError(err.message || "An unexpected error occurred.");
-      // Display error to user, maybe near the button
-    } finally {
-      setIsDeleting(false);
-    }
+    );
   };
 
   return (
     <Card className="mb-0 border-border-light transition-colors hover:border-border-light/80">
       <CardContent className="flex items-center justify-between p-4">
-        <div className="mr-4 grow">
-          <h3 className="text-lg font-semibold text-text-primary sm:text-xl">
-            {hunter.name}
-          </h3>
-          <p className="text-sm text-text-secondary">
-            Level {hunter.level} {hunter.class} (Rank {hunter.rank})
-          </p>
-          {/* TODO: Maybe display a few key stats later */}
-          {error && <p className="mt-1 text-xs text-danger">Error: {error}</p>}
+        <div className="flex items-center gap-3">
+          <span className="text-xl">
+            {classIcons[hunter.class as HunterClass]}
+          </span>
+          <div>
+            <h3 className="text-lg font-semibold text-text-primary sm:text-xl">
+              {hunter.name}
+            </h3>
+            <p className="text-sm text-text-secondary">
+              Level {hunter.level} {hunter.class} (Rank {hunter.rank})
+            </p>
+          </div>
         </div>
         <div className="flex flex-col space-y-2 sm:flex-row sm:space-x-2 sm:space-y-0">
           <Button
@@ -87,6 +83,7 @@ export const HunterCard: React.FC<HunterCardProps> = ({ hunter, onDelete }) => {
             onClick={handleSelect}
             disabled={isDeleting}
             className="w-full sm:w-auto"
+            aria-label={`Select hunter ${hunter.name}`}
           >
             Select
           </Button>
@@ -96,6 +93,7 @@ export const HunterCard: React.FC<HunterCardProps> = ({ hunter, onDelete }) => {
             onClick={handleDelete}
             disabled={isDeleting}
             className="w-full sm:w-auto"
+            aria-label={`Delete hunter ${hunter.name}`}
           >
             {isDeleting ? "Deleting..." : "Delete"}
           </Button>

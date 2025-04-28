@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Separator } from "@/components/ui/Separator";
+import SkillsDisplay from "@/components/skills/SkillsDisplay";
 
 // Define possible ranks for filtering
 const skillRanks: SkillRank[] = ["E", "D", "C", "B", "A", "S"];
@@ -263,128 +264,15 @@ function SkillsContent() {
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <Card className="border-secondary/80">
-          <CardHeader>
-            <CardTitle className="text-xl text-secondary">
-              Equipped Active Skills ({equippedSkillDetails.length}/
-              {MAX_EQUIPPED})
-            </CardTitle>
-            <CardDescription>
-              These skills are usable in combat.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="min-h-[150px]">
-            {" "}
-            {equippedSkillDetails.length === 0 ? (
-              <p className="pt-4 text-center text-sm italic text-text-disabled">
-                No active skills equipped. Equip skills from the list below.
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {equippedSkillDetails.map((skill) => (
-                  <SkillCard
-                    key={`equipped-${skill.id}`}
-                    skill={skill}
-                    hunter={hunter}
-                    onUnlock={handleUnlockSkill}
-                    onEquip={handleEquipSkill}
-                    onUnequip={handleUnequipSkill}
-                    isLoading={actionLoading.has(skill.id)}
-                    isEquipped={true}
-                    isUnlocked={true}
-                  />
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border-accent/80">
-          <CardHeader>
-            <CardTitle className="text-xl text-accent">
-              Unlocked Passive Skills
-            </CardTitle>
-            <CardDescription>
-              These skills provide permanent bonuses.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="min-h-[150px]">
-            {" "}
-            {unlockedPassiveSkills.length === 0 ? (
-              <p className="pt-4 text-center text-sm italic text-text-disabled">
-                No passive skills unlocked.
-              </p>
-            ) : (
-              <ul className="space-y-2">
-                {unlockedPassiveSkills.map((skill) => (
-                  <li
-                    key={`passive-${skill.id}`}
-                    className="bg-background-alt border-border-primary rounded border p-2 text-sm"
-                  >
-                    <span className="text-accent-foreground font-semibold">
-                      {skill.name} (Rank {skill.rank}):
-                    </span>
-                    <span className="ml-2 text-text-secondary">
-                      {skill.description}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Separator />
-
-      <div>
-        <h2 className="mb-4 text-2xl font-semibold">Available Skills</h2>
-        <div className="mb-4 flex flex-wrap gap-2">
-          <Button
-            variant={rankFilter === "All" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setRankFilter("All")}
-          >
-            All Ranks
-          </Button>
-          {skillRanks.map((rank) => (
-            <Button
-              key={rank}
-              variant={rankFilter === rank ? "default" : "outline"}
-              size="sm"
-              onClick={() => setRankFilter(rank)}
-            >
-              Rank {rank}
-            </Button>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {availableSkillsToDisplay.map((skill) => {
-            const isUnlocked = unlockedSkillsSet.has(skill.id);
-            const isEquipped = equippedSkillsSet.has(skill.id);
-            return (
-              <SkillCard
-                key={`available-${skill.id}`}
-                skill={skill}
-                hunter={hunter}
-                onUnlock={handleUnlockSkill}
-                onEquip={handleEquipSkill}
-                onUnequip={handleUnequipSkill}
-                isLoading={actionLoading.has(skill.id)}
-                isEquipped={isEquipped}
-                isUnlocked={isUnlocked}
-              />
-            );
-          })}
-          {availableSkillsToDisplay.length === 0 && (
-            <p className="col-span-full py-4 text-center italic text-text-disabled">
-              No skills match the current filter.
-            </p>
-          )}
-        </div>
-      </div>
+      <SkillsDisplay 
+        hunter={hunter}
+        handleUnlockSkill={handleUnlockSkill}
+        handleEquipSkill={handleEquipSkill}
+        handleUnequipSkill={handleUnequipSkill}
+        actionLoading={actionLoading}
+        rankFilter={rankFilter}
+        setRankFilter={setRankFilter}
+      />
     </div>
   );
 }

@@ -1,5 +1,8 @@
 import { ClassType } from "@/constants/classes.constants";
 import { EquipmentSlots, InventoryItem } from "./item.types"; // Import new types
+import { StaticImageData } from "next/image";
+import { ClassInfo } from "./class.types"; // Assuming ClassInfo is defined here
+import { SkillRank } from "./skill.types"; // Assuming SkillRank is defined here
 
 export interface HunterEquipment {
   head?: string; // Item ID
@@ -12,6 +15,13 @@ export interface HunterEquipment {
   accessory1?: string;
   accessory2?: string;
 }
+
+export type AllocatableStat =
+  | "strength"
+  | "agility"
+  | "perception"
+  | "intelligence"
+  | "vitality";
 
 export interface Hunter {
   id: string;
@@ -55,4 +65,21 @@ export interface Hunter {
   createdAt: string; // ISO date string
   updatedAt: string; // ISO date string
   // TODO: Add skills (active/passive)
+}
+
+// Interface for Hunter creation payload (example)
+export interface CreateHunterPayload {
+  name: string;
+  classType: keyof typeof ClassInfo; // Use keys from ClassInfo
+  // userId will likely be injected server-side from session
+}
+
+// Basic structure for item (expand later)
+export interface Item {
+  id: string;
+  name: string;
+  description: string;
+  type: string; // e.g., "Weapon", "Armor", "Consumable"
+  rarity: string;
+  // ... other properties like stats, effects, icon
 }

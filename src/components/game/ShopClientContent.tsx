@@ -13,6 +13,7 @@ import {
   CardFooter,
 } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import RealTimeClock from "@/components/ui/RealTimeClock";
 
 // Placeholder components
 // const ShopItemCard = ({ item }) => { ... };
@@ -93,20 +94,26 @@ function ShopContent() {
   // --- Main Shop Display ---
   return (
     <div className="container mx-auto px-4 py-8 sm:py-12">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-2xl sm:text-3xl">Shop</CardTitle>
-            <CardDescription>
-              Purchase items and equipment using Gold or Diamonds.
-            </CardDescription>
+      <Card className="mb-6 sm:mb-8">
+        <CardHeader className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 py-3 sm:px-6">
+          <h1 className="text-xl font-bold text-text-primary sm:text-2xl">Shop</h1>
+          <div className="justify-self-center">
+              <RealTimeClock />
           </div>
-          <Button
-            variant="outline"
-            onClick={() => router.push(`/dashboard?hunterId=${hunterId}`)}
-          >
-            &larr; Back to Dashboard
-          </Button>
+          <div className="justify-self-end">
+              <Button variant="link" className="px-0 text-sm" asChild>
+                <Link href={`/dashboard?hunterId=${hunterId}`}>&larr; Back to Dashboard</Link>
+              </Button>
+          </div>
+        </CardHeader>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-xl">Items for Sale</CardTitle>
+          <CardDescription>
+            Purchase items and equipment using Gold or Diamonds.
+          </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-6">
