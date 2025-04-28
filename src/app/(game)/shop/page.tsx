@@ -1,31 +1,53 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
-import { Hunter } from "@/types/hunter.types";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  CardFooter,
-} from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import ShopClientContent from "@/components/game/ShopClientContent";
+import React, { Suspense } from 'react';
+import { redirect } from 'next/navigation';
+import ShopClientContent from '@/components/shop/ShopClientContent';
+import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import Link from 'next/link';
 
-// Placeholder components
-// const ShopItemCard = ({ item }) => { ... };
-// const CategoryFilter = ({ categories, onSelect }) => { ... };
+interface ShopPageProps {
+    searchParams?: { [key: string]: string | string[] | undefined };
+}
 
-// Tell Next.js not to statically generate this page
-// export const dynamic = 'force-dynamic';
+// Wrap the main logic in a separate component for Suspense
+function ShopPageContent({ hunterId }: { hunterId: string }) {
+    return (
+        <div className="container mx-auto space-y-8 px-4 py-8">
+             <Card className="mb-6 sm:mb-8">
+                <CardHeader className="grid grid-cols-[1fr_auto] items-center gap-4 px-4 py-3 sm:px-6">
+                     <CardTitle className="text-xl font-bold text-text-primary sm:text-2xl">
+                        Item Shop
+                     </CardTitle>
+                    <div className="justify-self-end">
+                        <Button variant="link" className="px-0 text-sm" asChild>
+                           <Link href={`/dashboard?hunterId=${hunterId}`}>&larr; Back to Dashboard</Link>
+                         </Button>
+                    </div>
+                 </CardHeader>
+             </Card>
 
-export default function ShopPage() {
-  return (
-    <Suspense fallback={<div>Loading Shop...</div>}>
-      <ShopClientContent />
-    </Suspense>
-  );
+            {/* Client component handles fetching and display */}
+            <ShopClientContent hunterId={hunterId} />
+        </div>
+    );
+}
+
+export default function ShopPage({ searchParams }: ShopPageProps) {
+    const hunterId = searchParams?.hunterId;
+
+    // Require hunterId to access the shop
+    if (!hunterId || typeof hunterId !== 'string') {
+        console.warn("ShopPage: hunterId missing or invalid, redirecting to hunters selection.");
+        // Redirect to hunter selection if no ID is provided
+        redirect('/hunters');
+    }
+
+    // Use Suspense for cleaner handling of searchParams potentially being async in future Next.js versions
+    return (
+        <Suspense fallback={<div className="p-10 text-center">Loading Shop...</div>}>
+            <ShopPageContent hunterId={hunterId} />
+        </Suspense>
+    );
 }

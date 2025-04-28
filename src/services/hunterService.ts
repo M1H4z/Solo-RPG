@@ -67,9 +67,9 @@ export async function processAndCombineHunterData(
   // Combine processed data with fetched inventory/equipment and skills
   return {
     ...processedHunter,
-    // Add gold/diamonds back if fetched from elsewhere or default to 0
-    gold: 0,
-    diamonds: 0,
+    // Use the actual gold/diamonds values fetched from the database
+    gold: dbHunter.gold ?? 0, // Use fetched value, default to 0 if null/undefined
+    diamonds: dbHunter.diamonds ?? 0, // Use fetched value, default to 0 if null/undefined
     // Use createdAt as placeholder for updatedAt since it's required by type but not in DB
     updatedAt: processedHunter.createdAt || new Date().toISOString(), // Fallback to current time if createdAt is missing
     inventory: inventory || [],

@@ -5,7 +5,13 @@ import { useRouter } from "next/navigation";
 // No longer importing Server Action: import { signUpUser } from '@/services/authService';
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Select } from "@/components/ui/Select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/Select";
 import { cn } from "@/lib/utils";
 
 // Basic list of countries for the dropdown
@@ -26,6 +32,7 @@ const countries = [
   "Argentina",
   "Italy",
   "Spain",
+  "Malaysia",
   "Singapore",
   "Indonesia",
   "Thailand",
@@ -156,21 +163,32 @@ export function RegisterForm() {
           required
           disabled={loading}
         />
-        {/* Use themed Select for Country */}
+        {/* Use Shadcn Select structure */}
         <Select
           value={country}
-          onValueChange={(value) => setCountry(value)}
+          onValueChange={setCountry}
           required
           disabled={loading}
+          name="country"
         >
-          <option value="" disabled>
-            Select Country
-          </option>
-          {countries.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
+          <SelectTrigger className={cn(
+            "w-full",
+            // Match Input styles:
+            "flex h-10 rounded-md border border-border-dark bg-surface px-3 py-2 text-sm",
+            // Add placeholder styling when no value is selected
+            !country && "text-text-secondary",
+            // Ensure focus ring matches Input
+            "focus:ring-2 focus:ring-secondary focus:ring-offset-2 focus:ring-offset-background"
+          )}>
+            <SelectValue placeholder="Select Country" />
+          </SelectTrigger>
+          <SelectContent>
+            {countries.map((c) => (
+              <SelectItem key={c} value={c}>
+                {c}
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
         {error && (
           <p className="py-1 text-center text-sm text-danger">{error}</p>

@@ -14,6 +14,9 @@ import SkillsDisplay from "@/components/skills/SkillsDisplay"; // Import skills 
 import { getSkillById } from "@/constants/skills"; // Needed for skill handlers
 import { calculateDerivedStats } from "@/lib/stats"; // Import from lib/stats.ts
 import RealTimeClock from "@/components/ui/RealTimeClock"; // Import the clock
+import CurrencyHistoryChart from "@/components/game/CurrencyHistoryChart"; // Import the new chart component
+import { Input } from "@/components/ui/Input"; // Import Input for amount
+import { cn } from "@/lib/utils"; // Import cn for conditional classes
 
 const MAX_EQUIPPED = 4; // Define for equip logic
 
@@ -28,8 +31,14 @@ function ProfileContent() {
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<Set<string>>(new Set()); // For skills
   const [rankFilter, setRankFilter] = useState<SkillRank | "All">("All"); // For skills display
-  const [expLoading, setExpLoading] = useState(false); // State for EXP button loading (copied)
-  const [expToAdd, setExpToAdd] = useState<number>(100); // State for EXP amount (copied)
+  const [expLoading, setExpLoading] = useState(false); // State for EXP button loading
+  const [expToAdd, setExpToAdd] = useState<number>(100); // State for EXP amount
+  // Add state for gold adjustment
+  const [goldLoading, setGoldLoading] = useState(false);
+  const [goldAdjustmentAmount, setGoldAdjustmentAmount] = useState<number>(100);
+  const [diamondAmount, setDiamondAmount] = useState<number>(10); // State for diamond amount
+  const [isAdjustingGold, setIsAdjustingGold] = useState(false);
+  const [isAdjustingDiamonds, setIsAdjustingDiamonds] = useState(false); // State for diamond adjustment loading
 
   // --- Data Fetching ---
   const fetchHunterData = useCallback(async (isRefetch = false) => {
@@ -262,6 +271,108 @@ function ProfileContent() {
     }
   };
 
+  // --- Gold Adjustment Logic (New) ---
+  const handleGoldAmountChange = (change: number) => {
+    setGoldAdjustmentAmount((prev) => Math.max(100, prev + change)); // Min 100
+  };
+
+  const handleAdjustGold = async (amount: number) => {
+    if (!hunterId || !hunter || goldLoading) return;
+
+    const action = amount > 0 ? "Add" : "Remove";
+    const absAmount = Math.abs(amount);
+
+    setGoldLoading(true);
+
+    // Optimistic update (optional, can be simple)
+    const previousGold = hunter.gold ?? 0;
+    setHunter(currentHunter => {
+      if (!currentHunter) return null;
+      return {
+        ...currentHunter,
+        gold: (currentHunter.gold ?? 0) + amount,
+      };
+    });
+
+    try {
+      const response = await fetch(`/api/hunters/${hunterId}/adjust-gold`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount }), // Send positive or negative amount
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `Failed to ${action.toLowerCase()} gold`);
+      }
+      toast.success(
+        `${action === 'Add' ? 'Added' : 'Removed'} ${absAmount} Gold. New balance: ${result.newBalance?.toLocaleString()}`
+      );
+      // Sync with backend confirmed state
+       if (result.updatedHunter) {
+         setHunter(prev => prev ? { ...prev, gold: result.updatedHunter.gold } : null);
+       } else {
+          console.warn("API did not return updatedHunter data after adjusting gold. Relying on optimistic update.");
+       }
+
+    } catch (err: any) {
+      console.error(`Error ${action.toLowerCase()}ing gold:`, err);
+      toast.error(`Error: ${err.message}`);
+      // Rollback UI on error
+      setHunter(prev => prev ? { ...prev, gold: previousGold } : null);
+    } finally {
+      setGoldLoading(false);
+    }
+  };
+
+  // --- Diamond Adjustment Logic (New) ---
+  const handleAdjustDiamonds = async (amount: number) => {
+    if (!hunterId || !hunter || isAdjustingDiamonds) return;
+
+    const action = amount > 0 ? "Add" : "Remove";
+    const absAmount = Math.abs(amount);
+
+    setIsAdjustingDiamonds(true);
+
+    // Optimistic update (optional, can be simple)
+    const previousDiamonds = hunter.diamonds ?? 0;
+    setHunter(currentHunter => {
+      if (!currentHunter) return null;
+      return {
+        ...currentHunter,
+        diamonds: (currentHunter.diamonds ?? 0) + amount,
+      };
+    });
+
+    try {
+      const response = await fetch(`/api/hunters/${hunterId}/adjust-diamonds`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount }), // Send positive or negative amount
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `Failed to ${action.toLowerCase()} diamonds`);
+      }
+      toast.success(
+        `${action === 'Add' ? 'Added' : 'Removed'} ${absAmount} Diamonds. New balance: ${result.newBalance?.toLocaleString()}`
+      );
+      // Sync with backend confirmed state
+       if (result.updatedHunter) {
+         setHunter(prev => prev ? { ...prev, diamonds: result.updatedHunter.diamonds } : null);
+       } else {
+          console.warn("API did not return updatedHunter data after adjusting diamonds. Relying on optimistic update.");
+       }
+
+    } catch (err: any) {
+      console.error(`Error ${action.toLowerCase()}ing diamonds:`, err);
+      toast.error(`Error: ${err.message}`);
+      // Rollback UI on error
+      setHunter(prev => prev ? { ...prev, diamonds: previousDiamonds } : null);
+    } finally {
+      setIsAdjustingDiamonds(false);
+    }
+  };
+
   // --- Render Logic ---
   if (loading) return <div className="p-10 text-center">Loading Profile...</div>;
   if (error || !hunter) return <div className="p-10 text-center text-danger">Error: {error || "Could not load profile."}</div>;
@@ -384,16 +495,102 @@ function ProfileContent() {
             <CardHeader>
               <CardTitle>Currency</CardTitle>
             </CardHeader>
-            {/* Enhance layout with flex and icons */}
-            <CardContent className="space-y-4 text-base"> {/* Increased text size */}
-               <div className="flex items-center gap-3"> {/* Flex container for Gold */} 
-                  <span className="text-2xl">💰</span> {/* Gold Icon */} 
-                  <span>Gold: <span className="font-semibold text-yellow-500">{hunter.gold ?? 0}</span></span>
-               </div>
-               <div className="flex items-center gap-3"> {/* Flex container for Diamonds */} 
-                  <span className="text-2xl">💎</span> {/* Diamond Icon */} 
-                  <span>Diamonds: <span className="font-semibold text-cyan-400">{hunter.diamonds ?? 0}</span></span>
-               </div>
+            <CardContent className="space-y-2">
+               {/* Existing Currency Display */}
+              <div className="flex justify-between items-center">
+                <span className="font-medium text-text-secondary">Gold:</span>
+                <span className="font-semibold text-accent">{hunter.gold?.toLocaleString() ?? 0} G</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="font-medium text-text-secondary">Diamonds:</span>
+                <span className="font-semibold text-accent-diamond">{hunter.diamonds?.toLocaleString() ?? 0} ♦</span>
+              </div>
+
+              {/* Gold Adjustment Test Buttons - Moved below currency display */}
+               <div className="flex items-center space-x-2 pt-2"> {/* New flex container */} 
+                   <Button
+                       variant="outline"
+                       size="sm"
+                       onClick={() => handleGoldAmountChange(-100)}
+                       disabled={goldLoading || goldAdjustmentAmount <= 100}
+                       aria-label="Decrease gold adjustment amount by 100"
+                       className="px-2 h-8" // Adjust height
+                   >
+                       -
+                   </Button>
+                   <span className="text-sm font-medium text-center tabular-nums w-12"> {/* Fixed width for amount */}
+                      {goldAdjustmentAmount}
+                   </span>
+                   <Button
+                       variant="outline"
+                       size="sm"
+                       onClick={() => handleGoldAmountChange(100)}
+                       disabled={goldLoading}
+                       aria-label="Increase gold adjustment amount by 100"
+                       className="px-2 h-8" // Adjust height
+                   >
+                       +
+                   </Button>
+                   <div className="flex-grow" /> {/* Spacer */} 
+                   <Button
+                       variant="outline"
+                       size="sm"
+                       onClick={() => handleAdjustGold(-goldAdjustmentAmount)} // Remove gold
+                       disabled={goldLoading || (hunter?.gold ?? 0) < goldAdjustmentAmount}
+                       className="h-8 text-danger hover:text-danger hover:bg-danger/10 border-danger/50 hover:border-danger text-xs px-2" // Smaller text/padding
+                   >
+                       {goldLoading ? "..." : "Remove"} {/* Shorter text */} 
+                   </Button>
+                   <Button
+                       variant="outline"
+                       size="sm"
+                       onClick={() => handleAdjustGold(goldAdjustmentAmount)} // Add gold
+                       disabled={goldLoading}
+                       className="h-8 text-success hover:text-success hover:bg-success/10 border-success/50 hover:border-success text-xs px-2" // Smaller text/padding
+                   >
+                       {goldLoading ? "..." : "Add"} {/* Shorter text */} 
+                   </Button>
+              </div>
+
+              {/* Diamond Adjustment Test Buttons - Corrected Syntax */}
+              <div className="flex items-center space-x-2 pt-2">
+                <Button
+                  size="sm" variant="outline"
+                  onClick={() => setDiamondAmount((prev) => Math.max(1, prev - 1))}
+                  disabled={isAdjustingDiamonds} aria-label="Decrease Diamond Amount"
+                  className="px-2 h-8"> {/* Match gold button style */}
+                  -
+                </Button>
+                <span className="text-sm font-medium text-center tabular-nums w-12"> {/* Match gold amount style */}
+                  {diamondAmount}
+                </span>
+                <Button
+                  size="sm" variant="outline"
+                  onClick={() => setDiamondAmount((prev) => prev + 1)}
+                  disabled={isAdjustingDiamonds} aria-label="Increase Diamond Amount"
+                  className="px-2 h-8"> {/* Match gold button style */}
+                  +
+                </Button>
+                <div className="flex-grow" /> {/* Spacer */}
+                <Button
+                  size="sm" variant="outline"
+                  onClick={() => handleAdjustDiamonds(-diamondAmount)} disabled={isAdjustingDiamonds}
+                  className="h-8 text-danger hover:text-danger hover:bg-danger/10 border-danger/50 hover:border-danger text-xs px-2"> {/* Match Remove Gold style */}
+                  {isAdjustingDiamonds ? "..." : "Remove"}
+                </Button>
+                <Button
+                  size="sm" variant="outline"
+                  onClick={() => handleAdjustDiamonds(diamondAmount)} disabled={isAdjustingDiamonds}
+                  className="h-8 text-success hover:text-success hover:bg-success/10 border-success/50 hover:border-success text-xs px-2"> {/* Match Add Gold style */}
+                  {isAdjustingDiamonds ? "..." : "Add"}
+                </Button>
+              </div>
+
+              {/* Separator and Chart */}
+              <Separator className="my-4" />
+              <h4 className="text-sm font-medium text-text-primary mb-2">Transaction History</h4>
+              <CurrencyHistoryChart hunterId={hunter.id} />
+
             </CardContent>
           </Card>
         </div>

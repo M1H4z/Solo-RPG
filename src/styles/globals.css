@@ -11,6 +11,64 @@
 }
 */
 
+/* Define CSS variables based on Tailwind theme for components like recharts */
+:root {
+  /* ... other variables if they exist ... */
+
+  /* Accent Colors for Chart */
+  --accent-gold: 50 96% 54%; /* From Tailwind 'accent' DEFAULT #facc15 */
+  --accent-diamond: 188 85% 53%; /* From Tailwind 'accent-diamond' DEFAULT #22d3ee */
+
+  /* Shadcn UI Base Variables (Ensure these align with your theme if modified) */
+  --background: 222.2 84% 4.9%; /* Example - Check your actual base */
+  --foreground: 210 40% 98%; /* Example */
+  --card: 222.2 84% 4.9%; /* Example */
+  --card-foreground: 210 40% 98%; /* Example */
+  /* ... other shadcn variables like popover, primary, secondary, muted, accent, destructive, border, input, ring ... */
+  --border: 217.2 32.6% 17.5%; /* Example */
+  --input: 217.2 32.6% 17.5%; /* Example */
+  --ring: 212.7 26.8% 83.9%; /* Example */
+  --radius: 0.5rem; /* Example */
+  --primary: 210 40% 98%; /* Example */
+  --primary-foreground: 222.2 47.4% 11.2%; /* Example */
+  --secondary: 217.2 32.6% 17.5%; /* Example */
+  --secondary-foreground: 210 40% 98%; /* Example */
+  --muted: 217.2 32.6% 17.5%; /* Example */
+  --muted-foreground: 215 20.2% 65.1%; /* Example */
+  /* --accent defined below matches gold */
+  --accent: 50 96% 54%; /* Use the gold HSL */
+  --accent-foreground: 60 9.1% 9.8%; /* Example */
+  --destructive: 0 62.8% 30.6%; /* Example */
+  --destructive-foreground: 210 40% 98%; /* Example */
+}
+
+/* Define dark theme variables if applicable */
+.dark {
+  /* Repeat variable definitions with dark theme values if they differ */
+  --background: 222.2 84% 4.9%;
+  --foreground: 210 40% 98%;
+  --card: 222.2 84% 4.9%;
+  --card-foreground: 210 40% 98%;
+  /* ... other dark theme variables ... */
+  --border: 217.2 32.6% 17.5%;
+  --input: 217.2 32.6% 17.5%;
+  --ring: 212.7 26.8% 83.9%;
+  --primary: 210 40% 98%;
+  --primary-foreground: 222.2 47.4% 11.2%;
+  --secondary: 217.2 32.6% 17.5%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 217.2 32.6% 17.5%;
+  --muted-foreground: 215 20.2% 65.1%;
+  --accent: 50 96% 54%;
+  --accent-foreground: 60 9.1% 9.8%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 210 40% 98%;
+
+  /* Chart specific variables (can be same as light or different) */
+  --accent-gold: 50 96% 54%;
+  --accent-diamond: 188 85% 53%;
+}
+
 body {
   /* Apply theme colors directly from tailwind.config.js */
   @apply bg-background text-text-primary;
