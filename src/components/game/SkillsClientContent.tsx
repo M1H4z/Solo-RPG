@@ -102,14 +102,15 @@ function SkillsContent() {
 
       console.log(`${actionType} successful:`, result);
 
+      // On success, update state from the API result if available
       if (result.hunter) {
         setHunter(result.hunter);
       } else {
+        // If API didn't return hunter data, log a warning but don't revert.
+        // The optimistic update might still be correct, or another fetch will occur.
         console.warn(
-          `API call ${actionType} succeeded but didn't return hunter data. Reverting.`,
+          `API call ${actionType} succeeded but didn't return hunter data.`
         );
-        setHunter(previousHunterState);
-        setError(`Failed to sync ${actionType} skill. State reverted.`);
       }
     } catch (err: any) {
       console.error(`Failed to ${actionType} skill (${skillId}):`, err);
@@ -117,7 +118,8 @@ function SkillsContent() {
         err.message ||
         `An error occurred while trying to ${actionType} the skill.`;
       setError(errorMessage);
-      setHunter(previousHunterState);
+      // On failure, refetch data to ensure consistency, discard optimistic changes
+      await fetchHunterData(true);
     }
   };
 
