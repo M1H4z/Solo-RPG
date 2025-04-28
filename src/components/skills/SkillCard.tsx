@@ -105,7 +105,7 @@ const SkillCard: React.FC<SkillCardProps> = ({
     // Not unlocked
     return (
       <Button
-        variant="primary"
+        variant="default"
         size="sm"
         onClick={handleUnlockClick}
         disabled={isLoading || !canUnlock}

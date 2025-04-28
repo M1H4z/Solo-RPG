@@ -6,10 +6,11 @@ import {
   CardDescription,
   CardContent,
   CardFooter,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+} from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
+import { InventoryItem } from "@/types/item.types";
 
 interface InventoryItemCardProps {
   item: InventoryItem;
@@ -83,7 +84,7 @@ export const InventoryItemCard: React.FC<InventoryItemCardProps> = ({
                 <span className="font-medium capitalize text-text-primary/80">
                   {stat}:
                 </span>{" "}
-                +{value}
+                +{typeof value === 'number' ? value : String(value)}
               </li>
             ))}
           </ul>

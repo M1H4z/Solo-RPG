@@ -19,22 +19,14 @@ const StatItem: React.FC<{ label: string; value: string | number }> = ({
 const StatsDisplay: React.FC<StatsDisplayProps> = ({ hunter }) => {
   const derivedStats = calculateDerivedStats(hunter);
 
-  // Map base stats from hunter object if stats property exists
-  const baseStats = hunter.stats
-    ? {
-        strength: hunter.stats.strength,
-        agility: hunter.stats.agility,
-        perception: hunter.stats.perception,
-        intelligence: hunter.stats.intelligence,
-        vitality: hunter.stats.vitality,
-      }
-    : {
-        strength: hunter.strength, // Fallback if stats is not nested
-        agility: hunter.agility,
-        perception: hunter.perception,
-        intelligence: hunter.intelligence,
-        vitality: hunter.vitality,
-      };
+  // Directly map base stats from hunter object
+  const baseStats = {
+    strength: hunter.strength,
+    agility: hunter.agility,
+    perception: hunter.perception,
+    intelligence: hunter.intelligence,
+    vitality: hunter.vitality,
+  };
 
   return (
     <div className="rounded-lg border border-gray-700 bg-gray-800 p-4 shadow-md">

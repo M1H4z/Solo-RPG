@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getUserSession } from "@/services/authService";
+import { allocateStatPoint } from "@/services/hunterService"; // Import the service function
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +8,7 @@ interface RouteContext {
   params: { hunterId: string };
 }
 
-// Define valid stat names that can be allocated
+// Define valid stat names - could potentially be shared from constants
 const VALID_STATS = [
   "strength",
   "agility",
@@ -17,11 +17,10 @@ const VALID_STATS = [
   "vitality",
 ];
 
-// POST handler to allocate a single stat point
+// POST handler to allocate a single stat point using the service layer
 export async function POST(request: Request, context: RouteContext) {
   const { hunterId } = context.params;
-  const session = await getUserSession();
-  const supabase = createSupabaseServerClient();
+  const session = await getUserSession(); // Still need session check here for authorization context
 
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -38,7 +37,7 @@ export async function POST(request: Request, context: RouteContext) {
     const body = await request.json();
     statToAllocate = body.statName;
     if (!statToAllocate || !VALID_STATS.includes(statToAllocate)) {
-      throw new Error("Invalid stat name provided.");
+      throw new Error("Invalid or missing stat name provided.");
     }
   } catch (error) {
     return NextResponse.json(
@@ -47,77 +46,34 @@ export async function POST(request: Request, context: RouteContext) {
     );
   }
 
-  const userId = session.user.id;
-
   try {
-    // --- Fetch current hunter points and the specific stat ---
-    // Note: We select stat_points and the specific stat column dynamically
-    const { data: currentHunter, error: fetchError } = await supabase
-      .from("hunters")
-      .select(`stat_points, ${statToAllocate}`) // Select points and the target stat
-      .eq("id", hunterId)
-      .eq("user_id", userId)
-      .single();
+    // Call the service function to handle the allocation logic
+    const result = await allocateStatPoint(hunterId, statToAllocate);
 
-    if (fetchError) {
-      if (fetchError.code === "PGRST116") {
-        // Not found
-        return NextResponse.json(
-          { error: "Hunter not found or access denied" },
-          { status: 404 },
-        );
+    if (!result.success) {
+      // Determine appropriate status code based on error message
+      let statusCode = 500;
+      if (result.error === "Unauthorized") {
+        statusCode = 401;
+      } else if (result.error?.includes("not found")) {
+        statusCode = 404;
+      } else if (result.error?.includes("No stat points")) {
+        statusCode = 400;
       }
-      console.error("Allocate Stat - Fetch Error:", fetchError);
-      throw new Error("Database error fetching hunter stats");
-    }
-    if (!currentHunter) {
-      return NextResponse.json(
-        { error: "Hunter not found or access denied" },
-        { status: 404 },
-      );
+      return NextResponse.json({ error: result.error }, { status: statusCode });
     }
 
-    // --- Check if points are available ---
-    if ((currentHunter.stat_points ?? 0) <= 0) {
-      return NextResponse.json(
-        { error: "No stat points available to allocate." },
-        { status: 400 },
-      );
-    }
-
-    // --- Prepare update data ---
-    // Dynamically create the update object
-    const updatedData: { [key: string]: number } = {
-      stat_points: (currentHunter.stat_points ?? 0) - 1, // Decrement stat points
-      [statToAllocate]:
-        (currentHunter[statToAllocate as keyof typeof currentHunter] ?? 0) + 1, // Increment target stat
-    };
-
-    // --- Update hunter in DB ---
-    const { error: updateError } = await supabase
-      .from("hunters")
-      .update(updatedData)
-      .eq("id", hunterId)
-      .eq("user_id", userId);
-
-    if (updateError) {
-      console.error("Allocate Stat - Update Error:", updateError);
-      throw new Error("Database error updating stats");
-    }
-
-    // --- Return success response ---
-    // Optionally return the updated hunter data if needed by the frontend
-    // For now, just confirm success
+    // Return the successful response from the service, including the updated hunter
     return NextResponse.json({
-      message: `Successfully allocated 1 point to ${statToAllocate}.`,
-      newStatPoints: updatedData.stat_points,
-      updatedStat: statToAllocate,
-      newStatValue: updatedData[statToAllocate],
-    });
+        message: result.message,
+        updatedHunter: result.updatedHunter // Pass the updated hunter object
+    }, { status: 200 });
+
   } catch (error: any) {
+    // Catch unexpected errors during service call or response handling
     console.error(`API Error allocating stat for hunter ${hunterId}:`, error);
     return NextResponse.json(
-      { error: error.message || "Failed to allocate stat point" },
+      { error: error.message || "Failed to allocate stat point due to an unexpected server error." },
       { status: 500 },
     );
   }

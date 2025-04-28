@@ -16,6 +16,29 @@ const countries = [
   "Australia",
   "Germany",
   "France",
+  "Japan",
+  "South Korea",
+  "Brazil",
+  "India",
+  "Nigeria",
+  "South Africa",
+  "Mexico",
+  "Argentina",
+  "Italy",
+  "Spain",
+  "Singapore",
+  "Indonesia",
+  "Thailand",
+  "Philippines",
+  "Vietnam",
+  "Brunei",
+  "China",
+  "Russia",
+  "Mongolia",
+  "North Korea",
+  "Myanmar (Burma)",
+  "Pakistan",
+  "Kazakhstan",
   // Add more countries as needed
 ];
 
@@ -135,9 +158,8 @@ export function RegisterForm() {
         />
         {/* Use themed Select for Country */}
         <Select
-          id="country"
           value={country}
-          onChange={(e) => setCountry(e.target.value)}
+          onValueChange={(value) => setCountry(value)}
           required
           disabled={loading}
         >

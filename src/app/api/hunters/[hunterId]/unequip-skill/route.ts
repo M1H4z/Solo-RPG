@@ -67,10 +67,11 @@ export async function POST(
     }
 
     console.log(`[API /unequip-skill] Success: ${result.message}`);
-    // Return success message only
+    // Return success message AND updated hunter data
     return NextResponse.json({
       success: true,
       message: result.message,
+      hunter: result.updatedHunter,
     });
   } catch (error: any) {
     console.error(

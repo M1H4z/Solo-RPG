@@ -76,10 +76,8 @@ function SkillsContent() {
     actionType: "unlock" | "equip" | "unequip",
     skillId: string,
     currentHunter: Hunter,
+    previousHunterState: Hunter
   ) => {
-    if (!currentHunter?.id || actionLoading === skillId) return;
-
-    setActionLoading(skillId);
     setError(null);
 
     const endpointMap = {
@@ -106,12 +104,12 @@ function SkillsContent() {
 
       if (result.hunter) {
         setHunter(result.hunter);
-        setActionLoading(null);
       } else {
         console.warn(
-          `API call ${actionType} succeeded but didn't return hunter data. Refetching.`,
+          `API call ${actionType} succeeded but didn't return hunter data. Reverting.`,
         );
-        await fetchHunterData(true);
+        setHunter(previousHunterState);
+        setError(`Failed to sync ${actionType} skill. State reverted.`);
       }
     } catch (err: any) {
       console.error(`Failed to ${actionType} skill (${skillId}):`, err);
@@ -119,25 +117,64 @@ function SkillsContent() {
         err.message ||
         `An error occurred while trying to ${actionType} the skill.`;
       setError(errorMessage);
+      setHunter(previousHunterState);
+    }
+  };
+
+  const handleUnlockSkill = async (skillId: string) => {
+    if (!hunter || actionLoading === skillId || (hunter.skillPoints ?? 0) <= 0) return;
+    const skillToUnlock = getSkillById(skillId);
+    if (!skillToUnlock) return;
+
+    const previousHunter = { ...hunter };
+    const optimisticHunter = {
+      ...hunter,
+      skillPoints: (hunter.skillPoints ?? 0) - skillToUnlock.skillPointCost,
+      unlockedSkills: [...(hunter.unlockedSkills || []), skillId],
+    };
+    setHunter(optimisticHunter);
+    setActionLoading(skillId);
+
+    try {
+      await handleApiCall("unlock", skillId, hunter, previousHunter);
+    } finally {
       setActionLoading(null);
     }
   };
 
-  const handleUnlockSkill = (skillId: string) => {
-    if (hunter && actionLoading !== skillId) {
-      handleApiCall("unlock", skillId, hunter);
+  const handleEquipSkill = async (skillId: string) => {
+    if (!hunter || actionLoading === skillId || (hunter.equippedSkills?.length ?? 0) >= MAX_EQUIPPED) return;
+
+    const previousHunter = { ...hunter };
+    const optimisticHunter = {
+      ...hunter,
+      equippedSkills: [...(hunter.equippedSkills || []), skillId],
+    };
+    setHunter(optimisticHunter);
+    setActionLoading(skillId);
+
+    try {
+      await handleApiCall("equip", skillId, hunter, previousHunter);
+    } finally {
+      setActionLoading(null);
     }
   };
 
-  const handleEquipSkill = (skillId: string) => {
-    if (hunter && actionLoading !== skillId) {
-      handleApiCall("equip", skillId, hunter);
-    }
-  };
+  const handleUnequipSkill = async (skillId: string) => {
+    if (!hunter || actionLoading === skillId) return;
 
-  const handleUnequipSkill = (skillId: string) => {
-    if (hunter && actionLoading !== skillId) {
-      handleApiCall("unequip", skillId, hunter);
+    const previousHunter = { ...hunter };
+    const optimisticHunter = {
+      ...hunter,
+      equippedSkills: (hunter.equippedSkills || []).filter(id => id !== skillId),
+    };
+    setHunter(optimisticHunter);
+    setActionLoading(skillId);
+
+    try {
+      await handleApiCall("unequip", skillId, hunter, previousHunter);
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -295,7 +332,7 @@ function SkillsContent() {
         <h2 className="mb-4 text-2xl font-semibold">Available Skills</h2>
         <div className="mb-4 flex flex-wrap gap-2">
           <Button
-            variant={rankFilter === "All" ? "primary" : "outline"}
+            variant={rankFilter === "All" ? "default" : "outline"}
             size="sm"
             onClick={() => setRankFilter("All")}
           >
@@ -304,7 +341,7 @@ function SkillsContent() {
           {skillRanks.map((rank) => (
             <Button
               key={rank}
-              variant={rankFilter === rank ? "primary" : "outline"}
+              variant={rankFilter === rank ? "default" : "outline"}
               size="sm"
               onClick={() => setRankFilter(rank)}
             >
@@ -344,9 +381,9 @@ function SkillsContent() {
 
 // Export the component wrapped in Suspense
 export default function SkillsClientContent() {
-    return (
-        <Suspense fallback={<div>Loading skills...</div>}>
-            <SkillsContent />
-        </Suspense>
-    );
+  return (
+    <Suspense fallback={<div>Loading skills...</div>}>
+      <SkillsContent />
+    </Suspense>
+  );
 } 

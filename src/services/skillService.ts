@@ -15,7 +15,7 @@ export const unlockSkill = async (
 ): Promise<{
   success: boolean;
   message: string;
-  updatedHunter?: Hunter /* Keep type but don't return */;
+  updatedHunter?: Hunter;
 }> => {
   const supabase = createSupabaseServerClient();
 
@@ -91,8 +91,30 @@ export const unlockSkill = async (
       };
     }
 
-    // 4. SKIP processing and return success WITHOUT updatedHunter
-    return { success: true, message: `Skill '${skill.name}' unlocked!` };
+    // Fetch the fully updated hunter data after the update
+    const { data: updatedDbHunter, error: fetchError } = await supabase
+        .from("hunters")
+        .select(HUNTER_BASE_COLUMNS)
+        .eq("id", hunterId)
+        .single();
+
+    if (fetchError || !updatedDbHunter) {
+        console.error("Failed to fetch updated hunter after unlocking skill:", fetchError);
+        return {
+            success: true,
+            message: `Skill '${skill.name}' unlocked, but failed to refetch hunter data.`
+        };
+    }
+
+    // Process the fetched data
+    const processedHunterData = await processAndCombineHunterData(updatedDbHunter);
+
+    return {
+        success: true,
+        message: `Skill '${skill.name}' unlocked!`,
+        updatedHunter: processedHunterData
+    };
+
   } catch (error) {
     console.error("Unexpected error in unlockSkill:", error);
     const message =
@@ -110,7 +132,7 @@ export const equipSkill = async (
 ): Promise<{
   success: boolean;
   message: string;
-  updatedHunter?: Hunter /* Keep type but don't return */;
+  updatedHunter?: Hunter;
 }> => {
   const supabase = createSupabaseServerClient();
   try {
@@ -124,7 +146,7 @@ export const equipSkill = async (
 
     const { data: dbHunter, error: hunterError } = await supabase
       .from("hunters")
-      .select("id, user_id, unlocked_skills, equipped_skills, rank") // rank is needed only if we add the optional rank check
+      .select("id, user_id, unlocked_skills, equipped_skills, rank")
       .eq("id", hunterId)
       .eq("user_id", userId)
       .single();
@@ -149,12 +171,6 @@ export const equipSkill = async (
         message: "Maximum equipped skills reached (4).",
       };
     }
-    // Optional Rank Check (can be added if desired, but unlock should cover it)
-    // const hunterRankIndex = SKILL_RANK_ORDER.indexOf(dbHunter.rank as any);
-    // const skillRankIndex = SKILL_RANK_ORDER.indexOf(skill.rank);
-    // if (hunterRankIndex < skillRankIndex) {
-    //     return { success: false, message: `Cannot equip skill above current rank (Rank: ${skill.rank}).` };
-    // }
 
     // Update WITHOUT updated_at
     const newEquippedSkills = [...(dbHunter.equipped_skills || []), skillId];
@@ -173,8 +189,30 @@ export const equipSkill = async (
       };
     }
 
-    // SKIP processing
-    return { success: true, message: `Skill '${skill.name}' equipped!` };
+    // Fetch the fully updated hunter data after the update
+    const { data: updatedDbHunter, error: fetchError } = await supabase
+        .from("hunters")
+        .select(HUNTER_BASE_COLUMNS)
+        .eq("id", hunterId)
+        .single();
+
+    if (fetchError || !updatedDbHunter) {
+        console.error("Failed to fetch updated hunter after equipping skill:", fetchError);
+        return {
+            success: true,
+            message: `Skill '${skill.name}' equipped, but failed to refetch hunter data.`
+        };
+    }
+
+    // Process the fetched data
+    const processedHunterData = await processAndCombineHunterData(updatedDbHunter);
+
+    return {
+        success: true,
+        message: `Skill '${skill.name}' equipped!`,
+        updatedHunter: processedHunterData
+    };
+
   } catch (error) {
     console.error("Unexpected error in equipSkill:", error);
     const message =
@@ -192,7 +230,7 @@ export const unequipSkill = async (
 ): Promise<{
   success: boolean;
   message: string;
-  updatedHunter?: Hunter /* Keep type but don't return */;
+  updatedHunter?: Hunter;
 }> => {
   const supabase = createSupabaseServerClient();
   try {
@@ -239,8 +277,32 @@ export const unequipSkill = async (
       };
     }
 
-    // SKIP processing
-    return { success: true, message: `Skill '${skill.name}' unequipped.` };
+    // Fetch the fully updated hunter data after the update
+    const { data: updatedDbHunter, error: fetchError } = await supabase
+        .from("hunters")
+        .select(HUNTER_BASE_COLUMNS) // Use the constant for base columns
+        .eq("id", hunterId)
+        .single();
+
+    if (fetchError || !updatedDbHunter) {
+        console.error("Failed to fetch updated hunter after unequipping skill:", fetchError);
+        // If fetching fails, we still succeeded in the update, but can't return the data.
+        // The client might still revert, but the DB change is persistent.
+        return {
+            success: true,
+            message: `Skill '${skill.name}' unequipped, but failed to refetch hunter data.`
+        };
+    }
+
+    // Process the fetched data
+    const processedHunterData = await processAndCombineHunterData(updatedDbHunter);
+
+    return {
+        success: true,
+        message: `Skill '${skill.name}' unequipped.`,
+        updatedHunter: processedHunterData // Return the processed hunter data
+    };
+
   } catch (error) {
     console.error("Unexpected error in unequipSkill:", error);
     const message =

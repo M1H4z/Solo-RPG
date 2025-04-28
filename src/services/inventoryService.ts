@@ -3,11 +3,13 @@
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getUserSession } from "./authService";
-import { Database } from "@/types/supabase"; // Import generated DB types
+import { Database, Tables } from "@/lib/supabase/database.types";
 import {
   InventoryItem,
   EquipmentSlots,
   EquipmentSlotType,
+  ItemType,
+  Rarity,
 } from "@/types/item.types";
 import { Hunter } from "@/types/hunter.types"; // Import Hunter type
 import { EQUIPMENT_SLOTS_ORDER } from "@/constants/inventory.constants";
@@ -43,6 +45,16 @@ async function verifyHunterOwnership(
   return count === 1;
 }
 
+// Define the expected shape for inventory query result
+type HunterInventoryItemRow = Tables<'hunter_inventory_items'> & {
+  items: Tables<'items'> | null;
+};
+
+// Define the expected shape for the specific query in equipItemToSpecificSlot
+type ItemInstanceWithSlot = Tables<'hunter_inventory_items'> & {
+    items: Pick<Tables<'items'>, 'id' | 'slot' | 'item_type' | 'name'> | null;
+};
+
 /**
  * Fetches the full inventory details for a given hunter.
  * Joins hunter_inventory_items with items table.
@@ -70,19 +82,34 @@ export async function getHunterInventory(
     throw new Error(`Database error fetching inventory: ${error.message}`);
   }
 
-  // Map the data to the InventoryItem structure
-  return (data || [])
+  // Map the data safely
+  return (data || []) // Work with data directly, fallback to empty array
     .map((itemData) => {
-      const baseItem = itemData.items;
-      if (!baseItem) return null; // Should not happen with inner join (*)
-      // Reverted to original mapping attempt (will likely show 'any' error again)
+      // Type guard for the individual itemData might be needed if TS still struggles
+      // For now, let's use optional chaining and explicit checks
+      const baseItem = itemData?.items;
+      if (!baseItem) { // Check if joined item data exists
+        console.warn(`Missing base item data for inventory instance: ${itemData?.instance_id}`);
+        return null;
+      }
+
+      // Map known properties explicitly
       return {
-        ...(baseItem as any), // Reverted: Spread base item properties
-        inventoryId: itemData.instance_id, // Map instance_id to inventoryId
+        id: baseItem.id,
+        name: baseItem.name,
+        description: baseItem.description || '',
+        type: baseItem.item_type as ItemType,
+        rarity: baseItem.rarity as Rarity,
+        icon: baseItem.icon || undefined,
+        stats: baseItem.stats,
+        slot: baseItem.slot ? (baseItem.slot as EquipmentSlotType) : undefined,
+        stackable: baseItem.stackable,
+        sellPrice: baseItem.sell_price || undefined,
+        inventoryId: itemData.instance_id,
         quantity: itemData.quantity,
       } as InventoryItem;
     })
-    .filter((item): item is InventoryItem => item !== null); // Filter out any nulls just in case
+    .filter((item): item is InventoryItem => item !== null);
 }
 
 /**
@@ -134,8 +161,8 @@ export async function getHunterEquipment(
     .select(
       `
             instance_id,
-            quantity, 
-            items (*) // Select all base item fields
+            quantity,
+            items (*)
         `,
     )
     .in("instance_id", equippedInstanceIds);
@@ -157,40 +184,45 @@ export async function getHunterEquipment(
     return {}; // No details found for the IDs
   }
 
-  // 3. Create a lookup map for faster access to item details by instance_id
-  const itemDetailsMap = new Map<string, (typeof equippedItemsData)[number]>();
-  for (const itemData of equippedItemsData) {
-    itemDetailsMap.set(itemData.instance_id, itemData);
+  // Create lookup map - use data directly
+  const itemDetailsMap = new Map<string, HunterInventoryItemRow>();
+  for (const itemData of (equippedItemsData || [])) {
+      // Check itemData structure before accessing
+      if (itemData && itemData.instance_id) {
+        itemDetailsMap.set(itemData.instance_id, itemData as HunterInventoryItemRow);
+      }
   }
 
-  // 4. Iterate through the defined equipment slots and build the result map
+  // Build equipment map safely
   const equipmentMap: EquipmentSlots = {};
   for (const slot of EQUIPMENT_SLOTS_ORDER) {
-    // Construct the column name dynamically (handle accessory1/2)
-    const columnName =
-      `equipped_${slot.toLowerCase().replace("1", "1").replace("2", "2")}` as keyof typeof hunterData;
+    const columnName = `equipped_${slot.toLowerCase().replace("1", "1").replace("2", "2")}` as keyof typeof hunterData;
     const instanceId = hunterData[columnName];
 
     if (instanceId && typeof instanceId === "string") {
       const itemData = itemDetailsMap.get(instanceId);
-      if (itemData && itemData.items) {
-        const baseItem = itemData.items;
-        // Map the data correctly to InventoryItem structure
-        // Reverted mapping
+      const baseItem = itemData?.items;
+      // Check if itemData and nested baseItem exist
+      if (baseItem) { // Simplified check: if baseItem exists, map it
         equipmentMap[slot] = {
-          ...(baseItem as any), // Reverted
-          inventoryId: itemData.instance_id, // Use the instance ID from inventory table
-          quantity: itemData.quantity,
+            id: baseItem.id,
+            name: baseItem.name,
+            description: baseItem.description || '',
+            type: baseItem.item_type as ItemType,
+            rarity: baseItem.rarity as Rarity,
+            icon: baseItem.icon || undefined,
+            stats: baseItem.stats,
+            slot: baseItem.slot ? (baseItem.slot as EquipmentSlotType) : undefined,
+            stackable: baseItem.stackable,
+            sellPrice: baseItem.sell_price || undefined,
+            inventoryId: itemData.instance_id,
+            quantity: itemData.quantity,
         } as InventoryItem;
       } else {
-        // This case should be rare if IDs are consistent
-        console.warn(
-          `Item details not found for instance ID ${instanceId} in slot ${slot}`,
-        );
+        console.warn(`Item details or nested item data not found for instance ID ${instanceId} in slot ${slot}`);
       }
     }
   }
-
   return equipmentMap;
 }
 
@@ -212,7 +244,7 @@ export async function addInventoryItem(
   if (!session?.user) {
     return { success: false, error: "Unauthorized: No session" };
   }
-  const supabase = createSupabaseServerClient<Database>();
+  const supabase: SupabaseClient<Database> = createSupabaseServerClient();
 
   // Verify Ownership
   const isOwner = await verifyHunterOwnership(
@@ -306,24 +338,14 @@ export async function addInventoryItem(
 export async function equipItemToSpecificSlot(
   hunterId: string,
   inventoryInstanceId: string,
-  targetSlot: EquipmentSlotType, // Explicitly require the target slot
-): Promise<{
-  success: boolean;
-  updatedEquipment?: EquipmentSlots;
-  error?: string;
-}> {
+  targetSlot: EquipmentSlotType,
+): Promise<{ success: boolean; updatedEquipment?: EquipmentSlots; error?: string; }> {
   const session = await getUserSession();
   if (!session?.user) {
     return { success: false, error: "Unauthorized: No session" };
   }
-  const supabase = createSupabaseServerClient<Database>();
-
-  // Verify Ownership
-  const isOwner = await verifyHunterOwnership(
-    hunterId,
-    session.user.id,
-    supabase,
-  );
+  const supabase: SupabaseClient<Database> = createSupabaseServerClient();
+  const isOwner = await verifyHunterOwnership(hunterId, session.user.id, supabase);
   if (!isOwner) {
     return {
       success: false,
@@ -332,32 +354,42 @@ export async function equipItemToSpecificSlot(
   }
 
   try {
-    // 1. Find item instance and get its base defined slot
+    // Step 1: Fetch the specific inventory item instance
     const { data: itemInstance, error: instanceError } = await supabase
-      .from("hunter_inventory_items")
-      .select(
-        `
-                instance_id,
-                items (id, slot, item_type, name) // Get name for error messages
-            `,
-      )
-      .eq("instance_id", inventoryInstanceId)
-      .eq("hunter_id", hunterId)
+      .from('hunter_inventory_items')
+      .select('instance_id, item_id') // Get item_id to fetch base item
+      .eq('instance_id', inventoryInstanceId)
+      .eq('hunter_id', hunterId)
       .maybeSingle();
 
     if (instanceError) throw instanceError;
-    if (!itemInstance || !itemInstance.items) {
+    if (!itemInstance) {
       return {
         success: false,
         error: `Item instance not found in inventory: ${inventoryInstanceId}`,
       };
     }
 
-    const baseItem = itemInstance.items;
-    const itemDefinedSlot = baseItem.slot as EquipmentSlotType | null;
-    const itemName = baseItem.name || "Item"; // Fallback name
+    // Step 2: Fetch the base item details using the item_id
+    const { data: baseItem, error: itemError } = await supabase
+      .from('items')
+      .select('id, slot, item_type, name')
+      .eq('id', itemInstance.item_id)
+      .maybeSingle();
 
-    // 2. Validate if the item is generally equippable
+    if (itemError) throw itemError;
+    if (!baseItem) {
+      return {
+        success: false,
+        error: `Base item definition not found for item ID: ${itemInstance.item_id}`,
+      };
+    }
+
+    // Now we have baseItem typed correctly from the separate query
+    const itemDefinedSlot = baseItem.slot as EquipmentSlotType | null;
+    const itemName = baseItem.name || "Item";
+
+    // Validation if the item is generally equippable
     if (!itemDefinedSlot || !isEquipmentSlotType(itemDefinedSlot)) {
       return {
         success: false,
@@ -365,17 +397,13 @@ export async function equipItemToSpecificSlot(
       };
     }
 
-    // 3. Validate if the item can go into the *target* slot
+    // Validation if the item can go into the *target* slot
     let canEquipInTargetSlot = false;
     if (itemDefinedSlot === targetSlot) {
-      canEquipInTargetSlot = true; // Direct match
-    } else if (
-      itemDefinedSlot === "MainHand" &&
-      (targetSlot === "MainHand" || targetSlot === "OffHand")
-    ) {
-      canEquipInTargetSlot = true; // MainHand weapon to Main/Off Hand
+      canEquipInTargetSlot = true;
+    } else if (itemDefinedSlot === "MainHand" && (targetSlot === "MainHand" || targetSlot === "OffHand")) {
+      canEquipInTargetSlot = true;
     }
-    // Add other rules here if needed (e.g., Shields)
 
     if (!canEquipInTargetSlot) {
       return {
@@ -384,41 +412,27 @@ export async function equipItemToSpecificSlot(
       };
     }
 
-    // 4. Construct the update object using the *targetSlot*
-    const equippedColumn =
-      `equipped_${targetSlot.toLowerCase().replace("1", "1").replace("2", "2")}` as keyof Hunter;
+    // Construct the update object
+    const equippedColumn = `equipped_${targetSlot.toLowerCase().replace("1", "1").replace("2", "2")}` as keyof Hunter;
     const hunterUpdate: Partial<Record<keyof Hunter, any>> = {
       [equippedColumn]: inventoryInstanceId,
     };
 
-    // 5. Perform the update on the hunters table
+    // Perform the update
     const { error: updateError } = await supabase
       .from("hunters")
       .update(hunterUpdate)
       .eq("id", hunterId);
 
-    if (updateError) {
-      console.error(
-        `Error equipping item ${inventoryInstanceId} to specific slot ${targetSlot} for hunter ${hunterId}:`,
-        updateError,
-      );
-      throw new Error(
-        `Database error updating equipment slot: ${updateError.message}`,
-      );
-    }
+    if (updateError) throw updateError;
 
-    // 6. Fetch updated equipment state
+    // Fetch updated equipment state
     const updatedEquipment = await getHunterEquipment(hunterId, supabase);
     return { success: true, updatedEquipment };
+
   } catch (error: any) {
-    console.error(
-      `Error in equipItemToSpecificSlot for hunter ${hunterId}, item ${inventoryInstanceId}, target ${targetSlot}:`,
-      error,
-    );
-    return {
-      success: false,
-      error: error.message || "Failed to equip item to specified slot.",
-    };
+    console.error(`Error in equipItemToSpecificSlot for hunter ${hunterId}, item ${inventoryInstanceId}, target ${targetSlot}:`, error);
+    return { success: false, error: error.message || "Failed to equip item to specified slot." };
   }
 }
 
@@ -438,7 +452,7 @@ export async function equipItem(
   if (!session?.user) {
     return { success: false, error: "Unauthorized: No session" };
   }
-  const supabase = createSupabaseServerClient<Database>();
+  const supabase: SupabaseClient<Database> = createSupabaseServerClient();
 
   // Verify Ownership
   const isOwner = await verifyHunterOwnership(
@@ -541,7 +555,7 @@ export async function unequipItem(
   if (!session?.user) {
     return { success: false, error: "Unauthorized: No session" };
   }
-  const supabase = createSupabaseServerClient<Database>();
+  const supabase: SupabaseClient<Database> = createSupabaseServerClient();
 
   // Verify Ownership
   const isOwner = await verifyHunterOwnership(
@@ -602,7 +616,7 @@ export async function dropInventoryItem(
   if (!session?.user) {
     return { success: false, error: "Unauthorized: No session" };
   }
-  const supabase = createSupabaseServerClient<Database>();
+  const supabase: SupabaseClient<Database> = createSupabaseServerClient();
 
   // Verify Ownership
   const isOwner = await verifyHunterOwnership(

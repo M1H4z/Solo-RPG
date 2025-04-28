@@ -12,6 +12,8 @@ import {
   CardTitle,
 } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Toaster, toast } from "sonner"; // Import sonner
 
 // Define the type for the stats we can allocate points to
 type AllocatableStat =
@@ -41,8 +43,8 @@ function DashboardContent() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [expLoading, setExpLoading] = useState(false); // State for EXP button loading
-    const [statLoading, setStatLoading] = useState<AllocatableStat | null>(null); // Track which stat is being allocated
     const [allocationError, setAllocationError] = useState<string | null>(null); // Specific error for stat allocation
+    const [expToAdd, setExpToAdd] = useState<number>(100); // State for EXP amount
 
     // Refetch function (extracted for reuse)
     async function fetchHunterData() {
@@ -89,8 +91,20 @@ function DashboardContent() {
 
     // --- Handler for gaining EXP ---
     const handleGainExp = async (amount: number) => {
-      if (!hunterId) return;
+      if (!hunterId || !hunter) return;
+
+      // Store previous state
+      const previousHunter = { ...hunter };
+
+      // Optimistic Update (simple: just update EXP)
+      const optimisticHunter = {
+        ...hunter,
+        experience: (hunter.experience ?? 0) + amount,
+      };
+      setHunter(optimisticHunter);
       setExpLoading(true);
+      // --- End Optimistic Update
+
       try {
         const response = await fetch(`/api/hunters/${hunterId}/gain-exp`, {
           method: "POST",
@@ -102,15 +116,21 @@ function DashboardContent() {
           throw new Error(result.error || "Failed to gain EXP");
         }
         console.log("Gain EXP Result:", result);
-        alert(
-          `${result.message}${result.levelUp ? `\nLeveled up to ${result.newLevel}! Gained ${result.statPointsGained} Stat Points, ${result.skillPointsGained} Skill Points.` : ""}`,
+        toast.success(
+          `${result.message}${result.levelUp ? ` | Leveled up to ${result.newLevel}! Points: ${result.statPointsGained} Stat, ${result.skillPointsGained} Skill.` : ""}`,
         );
-        // Refetch hunter data to update the display
-        setLoading(true); // Show general loading while refetching
-        fetchHunterData(); // Re-call the fetch function
+        // Sync with backend confirmed state (important for level ups/points)
+        if (result.updatedHunter) {
+          setHunter(result.updatedHunter);
+        } else {
+          console.warn("API did not return updatedHunter data after gaining EXP. Reverting optimistic update.");
+          setHunter(previousHunter); // Revert if no data
+        }
       } catch (err: any) {
         console.error("Error gaining EXP:", err);
-        alert(`Error gaining EXP: ${err.message}`);
+        toast.error(`Error gaining EXP: ${err.message}`);
+        // Rollback UI on error
+        setHunter(previousHunter);
       } finally {
         setExpLoading(false);
       }
@@ -119,29 +139,54 @@ function DashboardContent() {
     // --- Handler for allocating stat points ---
     const handleAllocateStat = async (statName: AllocatableStat) => {
       if (!hunterId || !hunter || hunter.statPoints <= 0) return;
-      setStatLoading(statName);
-      setAllocationError(null); // Clear previous allocation errors
+
+      // Store state BEFORE optimistic update for potential full revert on final error
+      // const previousHunter = { ...hunter }; // We will refetch on error instead
+
+      // Optimistic Update - DO THIS BEFORE the await
+      setHunter(currentHunter => {
+        if (!currentHunter || currentHunter.statPoints <= 0) return currentHunter; // Guard against race conditions
+        return {
+          ...currentHunter,
+          statPoints: (currentHunter.statPoints ?? 0) - 1,
+          [statName]: (currentHunter[statName] ?? 0) + 1,
+        };
+      });
+      // setStatLoading(statName); // Remove loading state per button
+      setAllocationError(null);
+
       try {
-        const response = await fetch(`/api/hunters/${hunterId}/allocate-stat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ statName }),
-        });
-        const result = await response.json();
-        if (!response.ok) {
-          throw new Error(
-            result.error || `Failed to allocate point to ${statName}`,
-          );
-        }
-        console.log("Allocate Stat Result:", result);
-        // Refetch data to show updated stats and points
-        fetchHunterData();
+          const result = await fetch(`/api/hunters/${hunterId}/allocate-stat`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ statName }),
+          });
+          const data = await result.json();
+
+          if (!result.ok) {
+              // If API fails, the optimistic update was wrong. Refetch to sync.
+              throw new Error(data.error || `Failed to allocate point to ${statName}`);
+          }
+
+          // API Succeeded! Trust the optimistic update.
+          // We don't need to setHunter from the response here,
+          // as the optimistic update already handled the UI change.
+          // The fetchHunterData() in the catch block will handle resync on failure.
+          toast.success(data.message || `Allocated 1 point to ${statName}.`);
+
       } catch (err: any) {
-        console.error(`Error allocating ${statName}:`, err);
-        setAllocationError(err.message || "Failed to allocate point.");
+          console.error(`Error allocating ${statName}:`, err);
+          toast.error(`Error allocating ${statName}: ${err.message}. Resyncing...`);
+          // Rollback UI by refetching the source of truth
+          await fetchHunterData();
+          setAllocationError(err.message || "Failed to allocate point.");
       } finally {
-        setStatLoading(null); // Clear loading state for this stat
+          // setStatLoading(null); // Remove loading state per button
       }
+  };
+
+    const handleAdjustExp = (change: number) => {
+        setExpToAdd((prev) => Math.max(100, prev + change)); // Min 100
     };
 
     // --- Loading State ---
@@ -197,178 +242,175 @@ function DashboardContent() {
 
     const handleRankUpClick = () => {
       console.log(`Initiating Rank-Up Quest for Rank ${nextRank}...`);
-      alert(
+      // Replace alert with toast
+      toast.info(
         `Starting Rank-Up Quest to achieve Rank ${nextRank}! (Not implemented yet)`,
       );
     };
 
     return (
-      <div className="container mx-auto px-4 py-8 sm:py-12">
-        <Card className="mb-6 sm:mb-8">
-          <CardHeader className="flex flex-col items-start justify-between sm:flex-row sm:items-center">
-            <div>
-              <CardTitle className="text-2xl font-bold tracking-wider text-text-primary sm:text-3xl">
-                {hunter.name}
-              </CardTitle>
-              <CardDescription className="text-base sm:text-lg">
-                Level {hunter.level} {hunter.class} - Rank {hunter.rank}
-              </CardDescription>
-            </div>
-            <Button variant="link" className="mt-2 px-0 sm:mt-0" asChild>
-              <Link href="/hunters">&larr; Change Hunter</Link>
-            </Button>
-          </CardHeader>
-        </Card>
-
-        <div className="grid grid-cols-1 gap-6 sm:gap-8 lg:grid-cols-3">
-          <Card className="lg:col-span-1">
-            <CardHeader>
-              <CardTitle className="text-xl sm:text-2xl">Stats</CardTitle>
+      <>
+        <Toaster position="bottom-right" richColors />
+        <div className="container mx-auto px-4 py-8 sm:py-12">
+          <Card className="mb-6 sm:mb-8">
+            <CardHeader className="flex flex-col items-start justify-between sm:flex-row sm:items-center">
+              <div>
+                <CardTitle className="text-2xl font-bold tracking-wider text-text-primary sm:text-3xl">
+                  {hunter.name}
+                </CardTitle>
+                <CardDescription className="text-base sm:text-lg">
+                  Level {hunter.level} {hunter.class} - Rank {hunter.rank}
+                </CardDescription>
+              </div>
+              <Button variant="link" className="mt-2 px-0 sm:mt-0" asChild>
+                <Link href="/hunters">&larr; Change Hunter</Link>
+              </Button>
             </CardHeader>
-            <CardContent>
-              <ul className="mb-4 space-y-2 text-sm sm:text-base">
-                {(
-                  [
-                    "strength",
-                    "agility",
-                    "perception",
-                    "intelligence",
-                    "vitality",
-                  ] as AllocatableStat[]
-                ).map((stat) => (
-                  <li key={stat} className="flex items-center justify-between">
-                    <span className="capitalize">
-                      {stat}:{" "}
-                      <span className="font-semibold text-accent">
-                        {hunter[stat]}
+          </Card>
+
+          <div className="grid grid-cols-1 gap-6 sm:gap-8 lg:grid-cols-3">
+            <Card className="lg:col-span-1">
+              <CardHeader>
+                <CardTitle className="text-xl sm:text-2xl">Stats</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="mb-4 space-y-2 text-sm sm:text-base">
+                  {(
+                    [
+                      "strength",
+                      "agility",
+                      "perception",
+                      "intelligence",
+                      "vitality",
+                    ] as AllocatableStat[]
+                  ).map((stat) => (
+                    <li key={stat} className="flex items-center justify-between">
+                      <span className="capitalize">
+                        {stat}:{" "}
+                        <span className="font-semibold text-accent">
+                          {hunter[stat]}
+                        </span>
                       </span>
-                    </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="size-6 border-primary/50 p-0 text-xs text-primary/80 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={() => handleAllocateStat(stat)}
+                        disabled={!hasStatPoints || loading}
+                        aria-label={`Increase ${stat}`}
+                      >
+                        +
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-4 space-y-2 border-t border-border-dark pt-4">
+                  <div className="space-y-1">
+                    <p className="text-sm">
+                      Stat Points:{" "}
+                      <span
+                        className={`font-semibold ${hasStatPoints ? "text-primary" : "text-text-disabled"}`}
+                      >
+                        {hunter.statPoints ?? 0}
+                      </span>
+                    </p>
+                    <p className="text-sm">
+                      Skill Points:{" "}
+                      <span className="font-semibold text-secondary">
+                        {hunter.skillPoints ?? 0}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="mt-4">
+                    <div className="mb-1 flex items-center justify-between text-xs">
+                      <span className="text-text-secondary">EXP</span>
+                      <span className="text-text-secondary">
+                        {isMaxLevel
+                          ? `MAX (${currentExp.toLocaleString()})`
+                          : `${expProgressInCurrentLevel.toLocaleString()} / ${expNeededForLevelGain.toLocaleString()}`}
+                      </span>
+                    </div>
+                    <progress
+                      className="[&::-webkit-progress-bar]:bg-background-secondary [&::-webkit-progress-value]:bg-accent-primary [&::-moz-progress-bar]:bg-accent-primary h-2 w-full [&::-webkit-progress-bar]:rounded-lg [&::-webkit-progress-value]:rounded-lg"
+                      value={isMaxLevel ? 1 : expProgressInCurrentLevel}
+                      max={isMaxLevel ? 1 : expNeededForLevelGain}
+                      aria-label={`Experience progress: ${isMaxLevel ? "Max Level" : `${expProgressInCurrentLevel} out of ${expNeededForLevelGain}`}`}
+                    />
+                  </div>
+                </div>
+                <div className="mt-4 border-t border-border-dark pt-4">
+                  <div className="flex items-center space-x-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      className="size-6 border-primary/50 p-0 text-xs text-primary/80 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
-                      onClick={() => handleAllocateStat(stat)}
-                      disabled={!hasStatPoints || statLoading === stat || loading}
-                      aria-label={`Increase ${stat}`}
+                      onClick={() => handleAdjustExp(-100)}
+                      disabled={expLoading || expToAdd <= 100}
+                      aria-label="Decrease EXP amount by 100"
+                      className="px-2"
                     >
-                      {statLoading === stat ? "..." : "+"}
+                      -
                     </Button>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-4 space-y-2 border-t border-border-dark pt-4">
-                <div className="space-y-1">
-                  <p className="text-sm">
-                    Stat Points:{" "}
-                    <span
-                      className={`font-semibold ${hasStatPoints ? "text-primary" : "text-text-disabled"}`}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleGainExp(expToAdd)}
+                      disabled={expLoading}
+                      className="flex-grow"
                     >
-                      {hunter.statPoints ?? 0}
-                    </span>
-                  </p>
-                  <p className="text-sm">
-                    Skill Points:{" "}
-                    <span className="font-semibold text-secondary">
-                      {hunter.skillPoints ?? 0}
-                    </span>
-                  </p>
-                </div>
-                <div className="mt-4">
-                  <div className="mb-1 flex items-center justify-between text-xs">
-                    <span className="text-text-secondary">EXP</span>
-                    <span className="text-text-secondary">
-                      {isMaxLevel
-                        ? `MAX (${currentExp.toLocaleString()})`
-                        : `${expProgressInCurrentLevel.toLocaleString()} / ${expNeededForLevelGain.toLocaleString()}`}
-                    </span>
+                      {expLoading ? "Gaining EXP..." : `Gain ${expToAdd} EXP (Test)`}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleAdjustExp(100)}
+                      disabled={expLoading}
+                      aria-label="Increase EXP amount by 100"
+                      className="px-2"
+                    >
+                      +
+                    </Button>
                   </div>
-                  <progress
-                    className="[&::-webkit-progress-bar]:bg-background-secondary [&::-webkit-progress-value]:bg-accent-primary [&::-moz-progress-bar]:bg-accent-primary h-2 w-full [&::-webkit-progress-bar]:rounded-lg [&::-webkit-progress-value]:rounded-lg"
-                    value={isMaxLevel ? 1 : expProgressInCurrentLevel}
-                    max={isMaxLevel ? 1 : expNeededForLevelGain}
-                    aria-label={`Experience progress: ${isMaxLevel ? "Max Level" : `${expProgressInCurrentLevel} out of ${expNeededForLevelGain}`}`}
-                  />
                 </div>
-                {allocationError && (
-                  <p className="mt-1 text-xs text-danger">
-                    Allocation Error: {allocationError}
-                  </p>
-                )}
-              </div>
-              <div className="mt-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleGainExp(150)} // Example: Gain 150 EXP
-                  disabled={expLoading}
-                  className="w-full"
-                >
-                  {expLoading ? "Gaining EXP..." : "Gain 150 EXP (Test)"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle className="text-xl sm:text-2xl">Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {isRankUpAvailable && (
-                <Button
-                  variant="destructive"
-                  className="w-full sm:col-span-2"
-                  onClick={handleRankUpClick}
-                  aria-label={`Start Rank-Up Quest for Rank ${nextRank}`}
-                >
-                  Rank-Up Quest (Rank {nextRank})
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle className="text-xl sm:text-2xl">Actions</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {isRankUpAvailable && (
+                  <Button
+                    variant="destructive"
+                    className="w-full sm:col-span-2"
+                    onClick={handleRankUpClick}
+                    aria-label={`Start Rank-Up Quest for Rank ${nextRank}`}
+                  >
+                    Rank-Up Quest (Rank {nextRank})
+                  </Button>
+                )}
+                <Button variant="default" className="w-full" asChild>
+                  <Link
+                    href={`/dungeons?hunterId=${hunterId}`}
+                    className="flex size-full items-center justify-center"
+                  >
+                    Enter Gate
+                  </Link>
                 </Button>
-              )}
-              <Button variant="default" className="w-full" asChild>
-                <Link
-                  href={`/dungeons?hunterId=${hunterId}`}
-                  className="flex size-full items-center justify-center"
-                >
-                  Enter Gate
-                </Link>
-              </Button>
-              <Button variant="secondary" className="w-full" asChild>
-                <Link
-                  href={`/skills?hunterId=${hunterId}`}
-                  className="flex size-full items-center justify-center"
-                >
-                  Skills
-                </Link>
-              </Button>
-              <Button variant="secondary" className="w-full" asChild>
-                <Link
-                  href={`/inventory?hunterId=${hunterId}`}
-                  className="flex size-full items-center justify-center"
-                >
-                  Inventory
-                </Link>
-              </Button>
-              <Button variant="secondary" className="w-full" asChild>
-                <Link
-                  href={`/shop?hunterId=${hunterId}`}
-                  className="flex size-full items-center justify-center"
-                >
-                  Shop
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
+                <Button variant="secondary" className="w-full" asChild>
+                  <Link
+                    href={`/skills?hunterId=${hunterId}`}
+                    className="flex size-full items-center justify-center"
+                  >
+                    Skills
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
+      </>
     );
 }
 
-// Export the component wrapped in Suspense
-export default function DashboardClientContent() {
-    return (
-        // The fallback UI is displayed while the DashboardContent is loading
-        <Suspense fallback={<div>Loading parameters...</div>}>
-            <DashboardContent />
-        </Suspense>
-    );
-} 
+export default DashboardContent;
