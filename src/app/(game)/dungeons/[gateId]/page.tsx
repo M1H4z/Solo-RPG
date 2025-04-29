@@ -4,8 +4,8 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import Link from "next/link";
 import RealTimeClock from "@/components/ui/RealTimeClock";
-// Placeholder for the client component that will render the dungeon view
-// import DungeonViewClientContent from '@/components/dungeons/DungeonViewClientContent';
+// Import the actual client component
+import DungeonViewClientContent from '@/components/dungeons/DungeonViewClientContent';
 
 interface DungeonPageProps {
   params: { gateId: string };
@@ -57,13 +57,8 @@ export default function DungeonPage({ params, searchParams }: DungeonPageProps) 
           </div>
         }
       >
-        {/* Placeholder for the actual Dungeon View Component */}
-        <div className="flex h-[60vh] w-full items-center justify-center rounded border border-dashed border-text-secondary bg-surface/50">
-            <p className="text-text-secondary">
-                Dungeon View Component Placeholder (gateId: {gateId}, hunterId: {hunterId})
-            </p>
-             {/* <DungeonViewClientContent gateId={gateId} hunterId={hunterId} /> */} 
-        </div>
+        {/* Render the actual Dungeon View Component */}
+        <DungeonViewClientContent gateId={gateId} hunterId={hunterId} />
       </Suspense>
     </div>
   );

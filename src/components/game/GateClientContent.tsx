@@ -247,16 +247,11 @@ function GateContent({ hunterId }: GateContentProps) {
                          </CardContent>
                        </Card>
                        <div className="flex flex-col justify-center gap-4 pt-2 sm:flex-row">
-                         <Button size="lg" onClick={() => handleEnterGate(activeGate.id)} disabled={actionLoading}>
+                         <Button onClick={() => handleEnterGate(activeGate.id)} disabled={actionLoading}>
                            Enter Gate
                          </Button>
-                         <Button 
-                            variant="destructive" 
-                            size="lg" 
-                            onClick={() => handleAbandonGate(activeGate.id)}
-                            disabled={actionLoading}
-                         >
-                           {actionLoading ? '...' : 'Abandon Gate'} 
+                         <Button size="lg" variant="destructive" onClick={() => handleAbandonGate(activeGate.id)} disabled={actionLoading}>
+                           Abandon Gate
                          </Button>
                        </div>
                    </div>
@@ -269,13 +264,7 @@ function GateContent({ hunterId }: GateContentProps) {
                   <p className="text-base text-text-secondary">
                       {hunter ? `Ready to locate a Rank ${hunter.rank} gate?` : "Loading hunter details..."}
                   </p>
-                  <Button
-                      size="xl"
-                      variant="secondary"
-                      onClick={handleLocateNewGate}
-                      disabled={actionLoading || !hunter}
-                      className="px-8 py-6 text-lg"
-                  >
+                  <Button size="lg" onClick={handleLocateNewGate} disabled={actionLoading}>
                       {actionLoading ? 'Locating...' : 'Locate New Gate'}
                   </Button>
                   <p className="pt-2 text-xs text-text-secondary">

@@ -9,6 +9,56 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      active_gates: {
+        Row: {
+          created_at: string
+          current_depth: number
+          current_room: number
+          expires_at: string
+          gate_rank: string
+          gate_type: string
+          hunter_id: string
+          id: string
+          rooms_per_depth: number[]
+          total_depth: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          current_depth?: number
+          current_room?: number
+          expires_at: string
+          gate_rank: string
+          gate_type: string
+          hunter_id: string
+          id?: string
+          rooms_per_depth: number[]
+          total_depth: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          current_depth?: number
+          current_room?: number
+          expires_at?: string
+          gate_rank?: string
+          gate_type?: string
+          hunter_id?: string
+          id?: string
+          rooms_per_depth?: number[]
+          total_depth?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "active_gates_hunter_id_fkey"
+            columns: ["hunter_id"]
+            isOneToOne: true
+            referencedRelation: "hunters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       currency_transactions: {
         Row: {
           amount_change: number
