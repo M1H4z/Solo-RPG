@@ -717,14 +717,14 @@ function InventoryContent() {
         <Toaster position="bottom-right" richColors />
 
         <div className="container mx-auto px-4 py-8 sm:py-12">
-            <Card className="mb-6 sm:mb-8">
-              <CardHeader className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 py-3 sm:px-6">
-                <h1 className="text-xl font-bold text-text-primary sm:text-2xl">Inventory</h1>
-                <div className="justify-self-center">
+            <Card className="mb-6 sm:mb-8 sticky top-0 z-50">
+              <CardHeader className="grid grid-cols-[1fr_auto_1fr] items-baseline gap-2 px-3 py-2 sm:gap-4 sm:px-6 sm:py-3">
+                <h1 className="text-lg font-bold text-text-primary sm:text-xl">Inventory</h1>
+                <div className="justify-self-center flex items-center">
                     <RealTimeClock />
                 </div>
-                <div className="justify-self-end">
-                    <Button variant="link" className="px-0 text-sm" asChild>
+                <div className="justify-self-end flex items-center">
+                    <Button variant="link" className="px-0 text-xs sm:text-sm" asChild>
                       <Link href={`/dashboard?hunterId=${hunterId}`}>&larr; Back to Dashboard</Link>
                     </Button>
                 </div>
