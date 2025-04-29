@@ -87,45 +87,55 @@ export const CurrencyHistoryChart: React.FC<CurrencyHistoryChartProps> = ({ hunt
     const processChartData = () => {
         if (transactions.length === 0) return [];
 
-        // Ensure transactions are sorted by time (API should handle this, but good practice)
         const sortedTransactions = [...transactions].sort((a, b) => 
             new Date(a.transaction_time).getTime() - new Date(b.transaction_time).getTime()
         );
 
-        let currentGold = 0;
-        let currentDiamond = 0;
+        // --- Calculate initial balances ---
+        const firstGoldTx = sortedTransactions.find(t => t.currency_type === 'gold');
+        const firstDiamondTx = sortedTransactions.find(t => t.currency_type === 'diamonds');
+        let initialGold = firstGoldTx ? Math.max(0, firstGoldTx.new_balance - firstGoldTx.amount_change) : 0;
+        let initialDiamond = firstDiamondTx ? Math.max(0, firstDiamondTx.new_balance - firstDiamondTx.amount_change) : 0;
+
+        let currentGold = initialGold;
+        let currentDiamond = initialDiamond;
         const processedData: { time: number; gold: number; diamond: number }[] = [];
 
-        // Optional: Add an initial zero point slightly before the first transaction
-        // This helps anchor the line chart if the first transaction isn't at time 0
         const firstTime = new Date(sortedTransactions[0].transaction_time).getTime();
-        processedData.push({ time: firstTime - 1, gold: 0, diamond: 0 }); // Add point just before
+        processedData.push({ time: firstTime - 1, gold: initialGold, diamond: initialDiamond }); 
 
         sortedTransactions.forEach(t => {
             const time = new Date(t.transaction_time).getTime();
+            
+            // Update balance based on transaction
             if (t.currency_type === 'gold') {
                 currentGold = t.new_balance;
-            } else if (t.currency_type === 'diamond') {
+            } else if (t.currency_type === 'diamonds') { 
                 currentDiamond = t.new_balance;
             }
-            // Add a point for this transaction time with current balances for BOTH currencies
-            processedData.push({ time, gold: currentGold, diamond: currentDiamond });
-        });
 
-        // Ensure no duplicate times if multiple transactions happen at once (e.g., DB trigger)
-        // This could be refined further if needed, but usually time resolution is sufficient.
+            // Add/Update point AT transaction time
+            const lastPoint = processedData[processedData.length - 1];
+            if (lastPoint && lastPoint.time === time) {
+                 // If a point already exists at this exact time, update it
+                 lastPoint.gold = currentGold;
+                 lastPoint.diamond = currentDiamond;
+            } else {
+                 // Otherwise, add a new point reflecting balance AFTER transaction(s) at this time
+                 processedData.push({ time, gold: currentGold, diamond: currentDiamond });
+            }
+        });
 
         return processedData;
     };
 
     const chartData = processChartData();
 
-    // ---- DEBUG LOG ----
-    console.log('Chart Data:', chartData);
+    // ---- Remove DEBUG LOG ----
+    // console.log('Chart Data:', chartData);
     // -------------------
 
-    // If still no chartData after processing (edge case), show empty message
-     if (chartData.length === 0) {
+    if (chartData.length <= 1) { // If only the initial point exists
         return (
             <p className="text-sm text-text-secondary text-center py-4">
                 No currency history available yet.
@@ -134,7 +144,6 @@ export const CurrencyHistoryChart: React.FC<CurrencyHistoryChartProps> = ({ hunt
     }
 
     const formatXAxis = (tickItem: number) => {
-         // Format timestamp to a readable date/time string
         return new Date(tickItem).toLocaleDateString([], { month: 'short', day: 'numeric', hour:'numeric', minute: '2-digit' });
     };
 
@@ -142,62 +151,54 @@ export const CurrencyHistoryChart: React.FC<CurrencyHistoryChartProps> = ({ hunt
         <ResponsiveContainer width="100%" height={250}>
             <LineChart 
                 data={chartData}
-                margin={{ top: 5, right: 20, left: -10, bottom: 5 }} // Adjusted margins
+                margin={{ top: 5, right: 5, left: -25, bottom: 5 }}
             >
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)"/>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis 
                     dataKey="time" 
                     type="number"
                     scale="time"
                     domain={['dataMin', 'dataMax']}
                     tickFormatter={formatXAxis} 
-                    tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                    tick={{ fontSize: 10, fill: '#94a3b8' }}
                     tickLine={false}
-                    axisLine={{ stroke: 'hsl(var(--border))' }}
+                    axisLine={{ stroke: '#334155' }}
                 />
                 <YAxis 
-                    yAxisId="left" 
                     orientation="left"
-                    stroke="hsl(var(--accent-gold))"
-                    tick={{ fontSize: 10, fill: 'hsl(var(--accent-gold))' }}
-                    tickLine={{ stroke: 'hsl(var(--accent-gold))' }}
-                    axisLine={{ stroke: 'hsl(var(--accent-gold))' }}
+                    stroke="#94a3b8"
+                    tick={{ fontSize: 10, fill: '#94a3b8' }}
+                    tickLine={{ stroke: '#334155' }}
+                    axisLine={{ stroke: '#334155' }}
                     allowDecimals={false}
+                    width={40}
                 />
-                 <YAxis 
-                    yAxisId="right" 
-                    orientation="right"
-                    stroke="hsl(var(--accent-diamond))"
-                    tick={{ fontSize: 10, fill: 'hsl(var(--accent-diamond))' }}
-                    tickLine={{ stroke: 'hsl(var(--accent-diamond))' }}
-                    axisLine={{ stroke: 'hsl(var(--accent-diamond))' }}
-                    allowDecimals={false}
-                 />
                 <Tooltip 
                     contentStyle={{
-                        backgroundColor: 'hsl(var(--background))',
-                        borderColor: 'hsl(var(--border))',
+                        backgroundColor: '#101223',
+                        borderColor: '#334155',
+                        color: '#f8fafc',
                         fontSize: '12px',
-                        borderRadius: 'var(--radius)',
+                        borderRadius: '0.375rem',
+                        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)'
                     }}
                     labelFormatter={(label) => formatXAxis(label as number)}
+                    cursor={{ stroke: '#f8fafc', strokeWidth: 1, strokeDasharray: '3 3' }}
                 />
-                <Legend wrapperStyle={{ fontSize: "12px" }}/>
+                <Legend wrapperStyle={{ fontSize: "12px", color: '#94a3b8' }} />
                 <Line 
-                    yAxisId="left"
                     type="monotone" 
                     dataKey="gold" 
-                    stroke="hsl(var(--accent-gold))"
+                    stroke="#facc15"
                     strokeWidth={2}
                     dot={false}
                     connectNulls={true}
                     name="Gold"
                 />
                 <Line 
-                    yAxisId="right"
                     type="monotone" 
                     dataKey="diamond" 
-                    stroke="hsl(var(--accent-diamond))"
+                    stroke="#22d3ee"
                     strokeWidth={2}
                     dot={false}
                     connectNulls={true}
@@ -207,5 +208,4 @@ export const CurrencyHistoryChart: React.FC<CurrencyHistoryChartProps> = ({ hunt
         </ResponsiveContainer>
     );
 };
-
 export default CurrencyHistoryChart; 
