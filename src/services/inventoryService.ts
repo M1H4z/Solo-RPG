@@ -299,6 +299,7 @@ export async function addInventoryItem(
             hunter_id: hunterId,
             item_id: itemId,
             quantity: quantityToAdd,
+            updated_at: new Date().toISOString(),
           });
         if (insertError) inventoryUpdateError = insertError;
       }
@@ -310,6 +311,7 @@ export async function addInventoryItem(
           hunter_id: hunterId,
           item_id: itemId,
           quantity: 1,
+          updated_at: new Date().toISOString(),
         }));
       const { error: insertError } = await supabase
         .from("hunter_inventory_items")
@@ -327,6 +329,11 @@ export async function addInventoryItem(
     return { success: true, updatedInventory };
   } catch (error: any) {
     console.error(`Error adding item ${itemId} for hunter ${hunterId}:`, error);
+    // REMOVED Check for unique constraint violation specifically
+    // if (error.code === '23505' && error.message?.includes('idx_unique_unequipped_item')) {
+    //     return { success: false, error: "Cannot add duplicate unique unequipped item." };
+    // }
+    // Return generic error for other issues
     return { success: false, error: error.message || "Failed to add item." };
   }
 }

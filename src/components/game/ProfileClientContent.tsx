@@ -14,7 +14,7 @@ import SkillsDisplay from "@/components/skills/SkillsDisplay"; // Import skills 
 import { getSkillById } from "@/constants/skills"; // Needed for skill handlers
 import { calculateDerivedStats } from "@/lib/stats"; // Import from lib/stats.ts
 import RealTimeClock from "@/components/ui/RealTimeClock"; // Import the clock
-import CurrencyHistoryChart from "@/components/game/CurrencyHistoryChart"; // Import the new chart component
+import { CurrencyHistoryChart } from "@/components/game/CurrencyHistoryChart"; // Use named import
 import { Input } from "@/components/ui/Input"; // Import Input for amount
 import { cn } from "@/lib/utils"; // Import cn for conditional classes
 

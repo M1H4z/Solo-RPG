@@ -34,15 +34,30 @@ export const HunterCard: React.FC<HunterCardProps> = ({ hunter, onDelete }) => {
           onClick: async () => {
             setIsDeleting(true);
             try {
-              const response = await fetch(`/api/hunters/${hunter.id}/delete`, {
+              const response = await fetch(`/api/hunters/${hunter.id}`, {
                 method: "DELETE",
               });
-              const result = await response.json();
-              if (!response.ok) {
-                throw new Error(result.error || "Failed to delete hunter.");
+
+              // Check for successful deletion (204 No Content or 200 OK)
+              if (response.status === 204) {
+                // Success (No Content)
+                toast.success(`${hunter.name} deleted successfully.`);
+                onDelete(hunter.id);
+              } else if (response.ok) {
+                 // Success (with JSON body - less common for DELETE but handle it)
+                 const result = await response.json(); 
+                 toast.success(result.message || `${hunter.name} deleted successfully.`);
+                 onDelete(hunter.id);
+              } else {
+                  // Attempt to parse error JSON only if not OK
+                  let errorData = { error: "Failed to delete hunter. Unknown error." };
+                  try {
+                      errorData = await response.json();
+                  } catch (parseError) {
+                      console.error("Could not parse error response:", parseError);
+                  }
+                  throw new Error(errorData.error || `Failed to delete hunter (Status: ${response.status})`);
               }
-              toast.success(`${hunter.name} deleted successfully.`);
-              onDelete(hunter.id);
             } catch (err: any) {
               console.error("Error deleting hunter:", err);
               toast.error(`Error deleting hunter: ${err.message}`);

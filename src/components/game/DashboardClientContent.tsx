@@ -147,16 +147,16 @@ function DashboardContent() {
 
       try {
           const result = await fetch(`/api/hunters/${hunterId}/allocate-stat`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ statName }),
-          });
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ statName }),
+        });
           const data = await result.json();
 
           if (!result.ok) {
               // If API fails, the optimistic update was wrong. Refetch to sync.
               throw new Error(data.error || `Failed to allocate point to ${statName}`);
-          }
+        }
 
           // API Succeeded! Trust the optimistic update.
           // We don't need to setHunter from the response here,
@@ -165,11 +165,11 @@ function DashboardContent() {
           toast.success(data.message || `Allocated 1 point to ${statName}.`);
 
       } catch (err: any) {
-          console.error(`Error allocating ${statName}:`, err);
+        console.error(`Error allocating ${statName}:`, err);
           toast.error(`Error allocating ${statName}: ${err.message}. Resyncing...`);
           // Rollback UI by refetching the source of truth
           await fetchHunterData();
-          setAllocationError(err.message || "Failed to allocate point.");
+        setAllocationError(err.message || "Failed to allocate point.");
       } finally {
           // setStatLoading(null); // Remove loading state per button
       }
@@ -242,26 +242,26 @@ function DashboardContent() {
     return (
       <>
         <Toaster position="bottom-right" richColors />
-        <div className="container mx-auto px-4 py-8 sm:py-12">
-          <Card className="mb-6 sm:mb-8">
+      <div className="container mx-auto px-4 py-8 sm:py-12">
+        <Card className="mb-6 sm:mb-8">
             <CardHeader className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 py-3 sm:px-6">
               <h1 className="text-xl font-bold text-text-primary sm:text-2xl">Dashboard</h1>
               <div className="justify-self-center">
                 <RealTimeClock />
-              </div>
+            </div>
               <div className="justify-self-end">
                 <Button variant="link" className="px-0 text-sm" asChild>
-                  <Link href="/hunters">&larr; Change Hunter</Link>
-                </Button>
+              <Link href="/hunters">&larr; Change Hunter</Link>
+            </Button>
               </div>
-            </CardHeader>
-          </Card>
+          </CardHeader>
+        </Card>
 
-          <div className="grid grid-cols-1 gap-6 sm:gap-8 lg:grid-cols-3">
-            <Card className="lg:col-span-1">
-              <CardHeader>
+        <div className="grid grid-cols-1 gap-6 sm:gap-8 lg:grid-cols-3">
+          <Card className="lg:col-span-1">
+            <CardHeader>
                 <CardTitle className="text-xl sm:text-2xl">Basic Info</CardTitle> 
-              </CardHeader>
+            </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <div className="grid grid-cols-1 gap-y-2">
                    <p>Name: <span className="font-semibold">{hunter.name}</span></p>
@@ -298,47 +298,47 @@ function DashboardContent() {
                 <div className="mt-4 space-y-1 border-t border-border-dark pt-4">
                   <p>Stat Points: <span className="font-semibold text-primary">{hunter.statPoints ?? 0}</span></p>
                   <p>Skill Points: <span className="font-semibold text-secondary">{hunter.skillPoints ?? 0}</span></p>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+            </CardContent>
+          </Card>
 
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle className="text-xl sm:text-2xl">Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {isRankUpAvailable && (
-                  <Button
-                    variant="destructive"
-                    className="w-full sm:col-span-2"
-                    onClick={handleRankUpClick}
-                    aria-label={`Start Rank-Up Quest for Rank ${nextRank}`}
-                  >
-                    Rank-Up Quest (Rank {nextRank})
-                  </Button>
-                )}
-                <Button variant="default" className="w-full" asChild>
-                  <Link
-                    href={`/dungeons?hunterId=${hunterId}`}
-                    className="flex size-full items-center justify-center"
-                  >
-                    Enter Gate
-                  </Link>
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle className="text-xl sm:text-2xl">Actions</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {isRankUpAvailable && (
+                <Button
+                  variant="destructive"
+                  className="w-full sm:col-span-2"
+                  onClick={handleRankUpClick}
+                  aria-label={`Start Rank-Up Quest for Rank ${nextRank}`}
+                >
+                  Rank-Up Quest (Rank {nextRank})
                 </Button>
-                <Button variant="secondary" className="w-full" asChild>
-                  <Link
-                    href={`/inventory?hunterId=${hunterId}`}
-                    className="flex size-full items-center justify-center"
-                  >
-                    Inventory
-                  </Link>
-                </Button>
-                <Button variant="secondary" className="w-full" asChild>
-                  <Link
-                    href={`/shop?hunterId=${hunterId}`}
-                    className="flex size-full items-center justify-center"
-                  >
-                    Shop
+              )}
+              <Button variant="default" className="w-full" asChild>
+                <Link
+                  href={`/dungeons?hunterId=${hunterId}`}
+                  className="flex size-full items-center justify-center"
+                >
+                  Enter Gate
+                </Link>
+              </Button>
+              <Button variant="secondary" className="w-full" asChild>
+                <Link
+                  href={`/inventory?hunterId=${hunterId}`}
+                  className="flex size-full items-center justify-center"
+                >
+                  Inventory
+                </Link>
+              </Button>
+              <Button variant="secondary" className="w-full" asChild>
+                <Link
+                  href={`/shop?hunterId=${hunterId}`}
+                  className="flex size-full items-center justify-center"
+                >
+                  Shop
                   </Link>
                 </Button>
                 <Button variant="secondary" className="w-full" asChild>
@@ -347,21 +347,21 @@ function DashboardContent() {
                      className="flex size-full items-center justify-center"
                    >
                      Profile
-                   </Link>
-                 </Button>
-              </CardContent>
-            </Card>
-          </div>
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
         </div>
+      </div>
       </>
     );
 }
 
 // Wrap the component that uses searchParams with Suspense
 export default function DashboardClientContent() {
-  return (
+    return (
     <Suspense fallback={<div>Loading Dashboard...</div>}> {/* Add Fallback UI */}
-      <DashboardContent />
-    </Suspense>
-  );
-}
+            <DashboardContent />
+        </Suspense>
+    );
+} 
