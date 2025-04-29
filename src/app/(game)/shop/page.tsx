@@ -6,6 +6,7 @@ import ShopClientContent from '@/components/shop/ShopClientContent';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
+import RealTimeClock from "@/components/ui/RealTimeClock";
 
 interface ShopPageProps {
     searchParams?: { [key: string]: string | string[] | undefined };
@@ -15,13 +16,16 @@ interface ShopPageProps {
 function ShopPageContent({ hunterId }: { hunterId: string }) {
     return (
         <div className="container mx-auto space-y-8 px-4 py-8">
-             <Card className="mb-6 sm:mb-8">
-                <CardHeader className="grid grid-cols-[1fr_auto] items-center gap-4 px-4 py-3 sm:px-6">
-                     <CardTitle className="text-xl font-bold text-text-primary sm:text-2xl">
-                        Item Shop
+             <Card className="mb-6 sm:mb-8 sticky top-0 z-50">
+                <CardHeader className="grid grid-cols-[1fr_auto_1fr] items-baseline gap-2 px-3 py-2 sm:gap-4 sm:px-6 sm:py-3">
+                     <CardTitle className="text-lg font-bold text-text-primary sm:text-xl">
+                        Shop
                      </CardTitle>
-                    <div className="justify-self-end">
-                        <Button variant="link" className="px-0 text-sm" asChild>
+                     <div className="justify-self-center flex items-center">
+                        <RealTimeClock />
+                     </div>
+                     <div className="justify-self-end flex items-center">
+                        <Button variant="link" className="px-0 text-xs sm:text-sm" asChild>
                            <Link href={`/dashboard?hunterId=${hunterId}`}>&larr; Back to Dashboard</Link>
                          </Button>
                     </div>
