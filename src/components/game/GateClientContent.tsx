@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
+import React, { useState, useEffect, Suspense, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Hunter } from "@/types/hunter.types";
 import {
   Card,
@@ -12,124 +11,200 @@ import {
   CardTitle,
 } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Database } from "@/lib/supabase/database.types";
+import { toast } from 'sonner';
+import { AlertTriangle } from 'lucide-react';
 
-// Placeholder type for active gate/dungeon state
-interface ActiveGateInfo {
-  id: string;
-  type: string; // e.g., "Goblin Dungeon"
-  rank: string; // e.g., "E"
-  currentDepth: number;
-  currentRoom: number;
-  timeRemaining?: string; // Optional: Format as needed
+// Type for the active gate data from the DB
+type ActiveGateInfo = Database['public']['Tables']['active_gates']['Row'];
+
+// --- Helper for Rank Colors ---
+const getRankColorClasses = (rank: string | null) => {
+    switch (rank?.toUpperCase()) {
+        case 'E': return { bg: 'bg-gray-500/30', border: 'border-gray-300', text: 'text-gray-900' };
+        case 'D': return { bg: 'bg-blue-500/30', border: 'border-blue-300', text: 'text-blue-900' };
+        case 'C': return { bg: 'bg-green-500/30', border: 'border-green-300', text: 'text-green-900' };
+        case 'B': return { bg: 'bg-purple-500/30', border: 'border-purple-300', text: 'text-purple-900' };
+        case 'A': return { bg: 'bg-yellow-500/30', border: 'border-yellow-300', text: 'text-yellow-900' };
+        case 'S': return { bg: 'bg-red-600/40', border: 'border-red-400', text: 'text-red-900' };
+        default: return { bg: 'bg-gray-500/30', border: 'border-gray-300', text: 'text-gray-900' }; // Default/Fallback
+    }
+};
+
+// Added props interface
+interface GateContentProps {
+    hunterId: string;
 }
 
-// Inner component that uses the hook
-function GateContent() { // Renamed from DungeonsContent
+// Inner component now accepts hunterId as prop
+function GateContent({ hunterId }: GateContentProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const hunterId = searchParams.get("hunterId");
 
   const [hunter, setHunter] = useState<Hunter | null>(null);
-  const [activeGate, setActiveGate] = useState<ActiveGateInfo | null>(
-    null,
-  );
+  const [activeGate, setActiveGate] = useState<ActiveGateInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch hunter data and check for active gate
-  useEffect(() => {
+  // Fetch hunter data and active gate status
+  const loadGateStatus = useCallback(async () => {
     if (!hunterId) {
       setError("Hunter ID is missing.");
       setLoading(false);
       return;
     }
 
-    async function loadGateStatus() { // Renamed from loadDungeonStatus
-      setLoading(true);
-      setError(null);
-      try {
-        // TODO: Implement API call to check for active gate & get hunter info
-        const hunterResponse = await fetch(`/api/hunters/${hunterId}`);
-        if (!hunterResponse.ok) {
-          throw new Error("Failed to load hunter data");
-        }
-        const hunterData = await hunterResponse.json();
-        setHunter(hunterData.hunter);
+    setLoading(true);
+    setError(null);
+    setActiveGate(null);
+    setHunter(null);
 
-        // --- SIMULATED GATE STATE --- // Updated comment
-        const hasActiveGate = false; // Math.random() > 0.5; // Changed variable name
-        if (hasActiveGate) {
-          setActiveGate({ // Changed state setter name
-            id: "gate-123", // Changed ID prefix
-            type: "Goblin Dungeon",
-            rank: hunterData.hunter?.rank || "E",
-            currentDepth: 1,
-            currentRoom: 1,
-            timeRemaining: "01:58:30",
-          });
-        } else {
-          setActiveGate(null); // Changed state setter name
-        }
-        // --- END SIMULATION --- //
-      } catch (err: any) {
-        console.error("Error loading gate status:", err); // Updated log message
-        setError(err.message || "Failed to load gate information."); // Updated error message
-      } finally {
-        setLoading(false);
+    try {
+      // Fetch Hunter Data (optional here, could be passed as prop if fetched higher up)
+      const hunterResponse = await fetch(`/api/hunters/${hunterId}`);
+      if (!hunterResponse.ok) {
+        const hunterError = await hunterResponse.json();
+        throw new Error(hunterError.error || "Failed to load hunter data");
       }
-    }
+      const hunterData = await hunterResponse.json();
+      setHunter(hunterData.hunter);
 
-    loadGateStatus();
+      // Fetch Active Gate Status
+      const gateResponse = await fetch(`/api/gate/status?hunterId=${hunterId}`);
+      if (!gateResponse.ok) {
+        const gateError = await gateResponse.json();
+        throw new Error(gateError.error || "Failed to load gate status");
+      }
+      const gateData = await gateResponse.json();
+      setActiveGate(gateData.activeGate); // API returns { activeGate: data | null }
+
+    } catch (err: any) {
+      console.error("Error loading gate status:", err);
+      setError(err.message || "Failed to load gate information.");
+    } finally {
+      setLoading(false);
+    }
   }, [hunterId]);
 
-  const handleOpenNewGate = () => {
-    console.log("Attempting to open new gate...");
-    // TODO: Implement actual API call to open a gate
-    alert("Opening new gate functionality not yet implemented.");
-  };
+  useEffect(() => {
+    loadGateStatus();
+  }, [loadGateStatus]);
 
-  const handleEnterGate = (gateId: string) => { // Renamed from handleEnterDungeon
-    console.log("Entering gate:", gateId); // Updated log message
-    // TODO: Navigate to the dungeon/combat interface
-    alert("Entering gate functionality not yet implemented.");
-  };
-
-  const handleAbandonGate = (gateId: string) => { // Parameter renamed for clarity
-    if (
-      window.confirm(
-        "Are you sure you want to abandon this gate? You won't be able to re-enter.",
-      )
-    ) {
-      console.log("Abandoning gate:", gateId); // Updated log message
-      // TODO: Implement API call to abandon the gate
-      setActiveGate(null); // Clear the state locally after confirmation (or upon API success)
-      alert("Abandoning gate functionality not yet implemented.");
+  const handleLocateNewGate = async () => {
+    if (!hunterId) {
+        toast.error("Cannot locate gate: Hunter ID is missing.");
+        return;
     }
+    setActionLoading(true);
+    console.log("Attempting to locate new gate...");
+
+    try {
+        const response = await fetch('/api/gate/locate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ hunterId }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            // Use error message from API if available
+            throw new Error(result.error || `Failed to locate gate (status: ${response.status})`);
+        }
+
+        // Success!
+        toast.success('New gate located!');
+        setActiveGate(result.activeGate); // Update state with the new gate data
+
+    } catch (err: any) {
+        console.error("Error locating gate:", err);
+        toast.error(`Failed to locate gate: ${err.message}`);
+        // Optionally clear activeGate state again if needed
+        // setActiveGate(null);
+    } finally {
+        setActionLoading(false);
+    }
+  };
+
+  const handleEnterGate = (gateId: string) => {
+    console.log("Entering gate:", gateId);
+    // TODO: Navigate to the dungeon/combat interface, passing gate details
+    alert("Entering gate functionality not yet implemented.");
+    // Example navigation:
+    // router.push(`/dungeons/${gateId}?hunterId=${hunterId}`);
+  };
+
+  const handleAbandonGate = (gateId: string) => {
+    if (!hunterId || !activeGate) {
+        toast.error("Cannot abandon gate: Missing required information.");
+        return;
+    }
+
+    // Show confirmation toast with warning icon
+    toast("Abandon Active Gate?", {
+        icon: <AlertTriangle className="h-4 w-4 text-yellow-500" />,
+        description: "Are you sure? You won't be able to re-enter.",
+        id: 'abandon-gate-confirm', 
+        action: {
+            label: "Abandon",
+            onClick: async () => {
+                setActionLoading(true);
+                toast.dismiss('abandon-gate-confirm');
+                console.log("Abandoning gate via toast confirmation:", gateId);
+                try {
+                    const response = await fetch('/api/gate/abandon', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ hunterId }),
+                    });
+                    const result = await response.json();
+                    if (!response.ok) {
+                        throw new Error(result.error || `Failed to abandon gate (status: ${response.status})`);
+                    }
+                    toast.success("Gate abandoned.");
+                    setActiveGate(null);
+                } catch (err: any) {
+                    console.error("Error abandoning gate:", err);
+                    toast.error(`Failed to abandon gate: ${err.message}`);
+                } finally {
+                    setActionLoading(false);
+                }
+            },
+        },
+        cancel: {
+            label: "Cancel",
+            onClick: () => { 
+                toast.dismiss('abandon-gate-confirm'); 
+                console.log('Abandon gate cancelled');
+            },
+        },
+        duration: Infinity, 
+    });
   };
 
   if (loading) {
     return (
-      <div className="flex h-full w-full items-center justify-center">
+      <div className="flex h-[50vh] w-full items-center justify-center">
         <p className="text-lg text-text-secondary">Checking Gate Status...</p>
       </div>
     );
   }
 
-  if (error || !hunter) {
+  if (error) {
     return (
-      <div className="flex h-full w-full items-center justify-center p-4">
+      <div className="flex h-[50vh] w-full items-center justify-center p-4">
         <Card className="w-full max-w-md border-danger">
           <CardHeader>
             <CardTitle className="text-center text-danger">
-              Error Loading Gate
+              Error Loading Gate Information
             </CardTitle>
           </CardHeader>
           <CardContent className="text-center">
             <p className="mb-6 text-text-secondary">
-              {error || "Could not load gate information for this hunter."}
+              {error}
             </p>
-            <Button variant="outline" onClick={() => router.back()}> 
-              &larr; Go Back
+            <Button variant="secondary" onClick={loadGateStatus}>
+              Retry
             </Button>
           </CardContent>
         </Card>
@@ -138,105 +213,87 @@ function GateContent() { // Renamed from DungeonsContent
   }
 
   return (
-    <div className="container mx-auto h-full px-4 py-8 sm:py-12">
-      <Card className="h-full">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-2xl sm:text-3xl">The Gate</CardTitle>
-            <CardDescription>
-              Enter dungeons to gain experience and find loot.
-            </CardDescription>
-          </div>
-          <Button
-            variant="outline"
-            onClick={() => router.push(`/dashboard?hunterId=${hunterId}`)}
-          >
-            &larr; Back to Dashboard
-          </Button>
-        </CardHeader>
+    <div className="flex h-full w-full flex-col items-center justify-center text-center">
+        {activeGate ? (
+            <div className="flex h-full w-full flex-col items-center justify-around">
+                 {(() => {
+                    const colors = getRankColorClasses(activeGate.gate_rank);
+                    return (
+                        <div className="relative flex h-48 w-48 items-center justify-center sm:h-64 sm:w-64">
+                            <div className={`absolute h-full w-full animate-pulse rounded-full ${colors.bg} blur-xl`}></div>
+                            <div className={`absolute h-3/4 w-3/4 animate-spin rounded-full border-t-4 border-l-4 ${colors.border} opacity-75 [animation-duration:3s]`}></div>
+                            <div className={`absolute h-1/2 w-1/2 rounded-full bg-white/80 ${colors.bg} opacity-50 blur-lg`}></div>
+                            <div className="absolute h-1/4 w-1/4 rounded-full bg-blue-100 blur-sm"></div>
+                             <p className={`z-10 text-xs font-semibold ${colors.text}`}>Rank {activeGate.gate_rank} Gate</p>
+                        </div>
+                      );
+                   })()}
 
-        <CardContent className="flex h-[calc(100%-theme(space.28))] flex-col items-center justify-center space-y-6"> {/* Adjusted height and centering */} 
-          {activeGate ? (
-            <div className="w-full max-w-lg space-y-4 text-center"> {/* Added max-width */} 
-              <h3 className="text-xl font-semibold text-primary">
-                Active Gate Detected!
-              </h3>
-              <Card className="border-primary/60 bg-surface/50">
-                <CardHeader>
-                  <CardTitle className="text-lg">
-                    {activeGate.type} [Rank {activeGate.rank}]
-                  </CardTitle>
-                  <CardDescription>
-                    Current Location: Depth {activeGate.currentDepth} - Room{" "}
-                    {activeGate.currentRoom}
-                  </CardDescription>
-                </CardHeader>
-                {activeGate.timeRemaining && (
-                  <CardContent className="pb-4"> {/* Added padding bottom */} 
-                    <p className="text-sm text-accent">
-                      Time Remaining: {activeGate.timeRemaining}
-                    </p>
-                  </CardContent>
-                )}
-              </Card>
-              <div className="flex flex-col justify-center gap-4 pt-4 sm:flex-row">
-                <Button
-                  size="lg"
-                  // glow="primary" // Assuming glow is a custom prop
-                  onClick={() => handleEnterGate(activeGate.id)} // Updated handler call
-                >
-                  Enter Gate
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="lg"
-                  onClick={() => handleAbandonGate(activeGate.id)} // Updated handler call
-                >
-                  Abandon Gate
-                </Button>
+                   <div className="mt-6 w-full max-w-md space-y-4">
+                     <Card className="border-primary/60 bg-surface/80 backdrop-blur-sm">
+                         <CardHeader className="pb-2 pt-3">
+                             <CardTitle className="text-base sm:text-lg">
+                                 {activeGate.gate_type}
+                              </CardTitle>
+                              <CardDescription className="text-xs sm:text-sm">
+                                 Depth {activeGate.current_depth}/{activeGate.total_depth} | Room {activeGate.current_room}/{activeGate.rooms_per_depth[activeGate.current_depth - 1]}
+                             </CardDescription>
+                         </CardHeader>
+                          <CardContent className="pb-3">
+                              <p className="text-xs text-accent sm:text-sm">
+                                  Expires: {new Date(activeGate.expires_at).toLocaleString()}
+                              </p>
+                         </CardContent>
+                       </Card>
+                       <div className="flex flex-col justify-center gap-4 pt-2 sm:flex-row">
+                         <Button size="lg" onClick={() => handleEnterGate(activeGate.id)} disabled={actionLoading}>
+                           Enter Gate
+                         </Button>
+                         <Button 
+                            variant="destructive" 
+                            size="lg" 
+                            onClick={() => handleAbandonGate(activeGate.id)}
+                            disabled={actionLoading}
+                         >
+                           {actionLoading ? '...' : 'Abandon Gate'} 
+                         </Button>
+                       </div>
+                   </div>
               </div>
-              <p className="pt-2 text-xs text-text-secondary">
-                You must complete or abandon the current gate before opening a
-                new one.
-              </p>
-            </div>
           ) : (
-            <div className="w-full max-w-lg space-y-4 text-center"> {/* Added max-width */} 
-              <h3 className="text-xl font-semibold text-text-secondary">
-                No Active Gate
-              </h3>
-              <p className="text-text-secondary">
-                Gates will be randomly selected based on your rank (
-                {hunter.rank}).
-              </p>
-              <Button
-                size="lg"
-                variant="secondary"
-                // glow="secondary" // Assuming glow is a custom prop
-                onClick={handleOpenNewGate}
-              >
-                Open New Gate
-              </Button>
-              <p className="pt-2 text-xs text-text-secondary">
-                Opening a gate might consume resources and has a time limit.
-              </p>
-            </div>
+              <div className="w-full max-w-lg space-y-6">
+                  <h3 className="text-2xl font-semibold text-text-secondary sm:text-3xl">
+                      No Active Gate
+                  </h3>
+                  <p className="text-base text-text-secondary">
+                      {hunter ? `Ready to locate a Rank ${hunter.rank} gate?` : "Loading hunter details..."}
+                  </p>
+                  <Button
+                      size="xl"
+                      variant="secondary"
+                      onClick={handleLocateNewGate}
+                      disabled={actionLoading || !hunter}
+                      className="px-8 py-6 text-lg"
+                  >
+                      {actionLoading ? 'Locating...' : 'Locate New Gate'}
+                  </Button>
+                  <p className="pt-2 text-xs text-text-secondary">
+                      Locating a gate might consume resources and entering has a time limit.
+                  </p>
+              </div>
           )}
-        </CardContent>
-      </Card>
     </div>
   );
 }
 
-// Export the component wrapped in Suspense
-export default function GateClientContent() { // Renamed default export
+export default function GateClientContent({ hunterId }: GateContentProps) {
     return (
         <Suspense fallback={
-          <div className="flex h-full w-full items-center justify-center">
+          <div className="flex h-[50vh] w-full items-center justify-center">
              Loading gate content...
           </div>
         }>
-            <GateContent />
+            <GateContent hunterId={hunterId} />
         </Suspense>
     );
 } 

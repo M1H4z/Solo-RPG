@@ -323,7 +323,7 @@ function DashboardContent() {
               )}
               <Button variant="default" className="w-full" asChild>
                 <Link
-                  href={`/dungeons?hunterId=${hunterId}`}
+                  href={`/gate?hunterId=${hunterId}`}
                   className="flex size-full items-center justify-center"
                 >
                   Enter Gate
