@@ -127,11 +127,12 @@ function GateContent({ hunterId }: GateContentProps) {
   };
 
   const handleEnterGate = (gateId: string) => {
+    if (!hunterId) {
+      toast.error("Cannot enter gate: Hunter ID missing.");
+      return;
+    }
     console.log("Entering gate:", gateId);
-    // TODO: Navigate to the dungeon/combat interface, passing gate details
-    alert("Entering gate functionality not yet implemented.");
-    // Example navigation:
-    // router.push(`/dungeons/${gateId}?hunterId=${hunterId}`);
+    router.push(`/dungeons/${gateId}?hunterId=${hunterId}`);
   };
 
   const handleAbandonGate = (gateId: string) => {
