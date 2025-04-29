@@ -6,7 +6,7 @@ import { Database } from '@/lib/supabase/database.types';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/Card'; // For styling the view area
 import { Skeleton } from '@/components/ui/skeleton'; // For loading state
-import { Button } from '@/components/ui/button'; // For the retry button
+import { Button } from '@/components/ui/Button'; // Corrected casing
 import CombatInterface from '@/components/combat/CombatInterface'; // <-- Import CombatInterface
 
 // Match interface structure from CombatInterface

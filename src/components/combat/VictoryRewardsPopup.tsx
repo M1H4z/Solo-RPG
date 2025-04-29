@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/Card';
 import { CheckCircle, Award, Package, Coins } from 'lucide-react'; // Icons for rewards
 
