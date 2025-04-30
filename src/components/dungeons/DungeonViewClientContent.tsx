@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/Card'; // For styling the vie
 import { Skeleton } from '@/components/ui/skeleton'; // For loading state
 import { Button } from '@/components/ui/Button'; // Corrected casing
 import CombatInterface from '@/components/combat/CombatInterface'; // <-- Import CombatInterface
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react';
 
 // Match interface structure from CombatInterface
 interface EnemyCombatEntity {
@@ -98,56 +99,74 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
         loadInitialData();
     }, [loadInitialData]);
 
-    // --- Movement Logic --- 
+    // --- Refactored Movement Logic ---
+    const handleMove = useCallback((direction: 'up' | 'down' | 'left' | 'right') => {
+        // Only allow movement when pending or cleared
+        if (!gateData || (roomStatus !== 'pending' && roomStatus !== 'cleared')) return;
+
+        setPlayerPos(currentPos => {
+            let nextPos = { ...currentPos };
+
+            switch (direction) {
+                case 'up':
+                    nextPos.y -= 1;
+                    break;
+                case 'down':
+                    nextPos.y += 1;
+                    break;
+                case 'left':
+                    nextPos.x -= 1;
+                    break;
+                case 'right':
+                    nextPos.x += 1;
+                    break;
+            }
+
+            // Boundary Checks
+            if (
+                nextPos.x < 0 ||
+                nextPos.x >= gridSize.width ||
+                nextPos.y < 0 ||
+                nextPos.y >= gridSize.height
+            ) {
+                return currentPos; 
+            }
+
+            console.log(`Moved ${direction} to: (${nextPos.x}, ${nextPos.y})`);
+            return nextPos;
+        });
+    }, [gateData, roomStatus, gridSize]); // Add gridSize dependency
+
+    // --- Keyboard Movement Listener ---
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
-            // Only allow movement when pending or cleared (to reach exit)
-            if (!gateData || (roomStatus !== 'pending' && roomStatus !== 'cleared')) return;
-
-            setPlayerPos(currentPos => {
-                let nextPos = { ...currentPos };
-
-                switch (event.key.toLowerCase()) { // Use toLowerCase for WASD
-                    case 'arrowup':
-                    case 'w':
-                        nextPos.y -= 1;
-                        break;
-                    case 'arrowdown':
-                    case 's':
-                        nextPos.y += 1;
-                        break;
-                    case 'arrowleft':
-                    case 'a':
-                        nextPos.x -= 1;
-                        break;
-                    case 'arrowright':
-                    case 'd':
-                        nextPos.x += 1;
-                        break;
-                    default:
-                        return currentPos; 
-                }
-
-                // Boundary Checks
-                if (
-                    nextPos.x < 0 ||
-                    nextPos.x >= gridSize.width ||
-                    nextPos.y < 0 ||
-                    nextPos.y >= gridSize.height
-                ) {
-                    return currentPos; 
-                }
-
-                console.log(`Moved to: (${nextPos.x}, ${nextPos.y})`);
-                return nextPos;
-            });
+             // Use the refactored movement handler
+            switch (event.key.toLowerCase()) { 
+                case 'arrowup':
+                case 'w':
+                    handleMove('up');
+                    break;
+                case 'arrowdown':
+                case 's':
+                    handleMove('down');
+                    break;
+                case 'arrowleft':
+                case 'a':
+                    handleMove('left');
+                    break;
+                case 'arrowright':
+                case 'd':
+                    handleMove('right');
+                    break;
+            }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
         };
-    }, [gridSize, gateData, roomStatus]); // Add roomStatus dependency
+    // Dependencies only include handleMove now
+    }, [handleMove]); 
 
     // --- Interaction Logic ---
     useEffect(() => {
@@ -201,9 +220,9 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
 
                     if (result.status === 'cleared') {
                         // Dungeon Complete!
-                        toast.success("Dungeon Cleared!", { description: "Returning to dashboard..." });
-                        // Redirect or update UI accordingly
-                        setTimeout(() => router.push('/dashboard'), 2000); // Redirect after a short delay
+                        toast.success("Dungeon Cleared!", { description: "Returning to Gate Hub..." });
+                        // Redirect back to the Gate Hub page (/gate), passing hunterId
+                        setTimeout(() => router.push(`/gate?hunterId=${hunterId}`), 2000); 
                         // No need to reload or reset player position here
                         return; // Exit the function early
                     }
@@ -256,120 +275,154 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
     };
     // ------------------------
 
-    // --- Render Logic ---
-    if (roomStatus === 'loading') {
-        return (
-            <Card className="h-[60vh]">
-                <CardContent className="flex h-full items-center justify-center">
-                    <Skeleton className="h-3/4 w-3/4" />
-                </CardContent>
-             </Card>
-        );
-    }
-
-    if (roomStatus === 'error' || !gateData) {
-        return (
-             <Card className="h-[60vh] border-danger">
-                 <CardContent className="flex h-full flex-col items-center justify-center p-6 text-center">
-                     <h3 className="mb-4 text-lg font-semibold text-danger">Error Loading Dungeon</h3>
-                     <p className="mb-6 text-text-secondary">{error || 'Could not load data for this dungeon gate.'}</p>
-                     <Button variant="secondary" onClick={loadInitialData}>Retry</Button>
-                 </CardContent>
-             </Card>
-        );
-    }
-
-    // --- Grid Rendering --- 
-    const renderGridCells = () => {
-        const cells = [];
-        for (let y = 0; y < gridSize.height; y++) {
-            for (let x = 0; x < gridSize.width; x++) {
-                cells.push(
-                    <div 
-                        key={`${x}-${y}`}
-                        className="aspect-square border border-border-dark/30 bg-background-secondary/30"
-                        // Style for grid positioning (CSS grid lines are 1-based)
-                        style={{ gridColumnStart: x + 1, gridRowStart: y + 1 }}
-                    ></div>
-                );
-            }
+    // --- Helper to get cell style ---
+    const getCellStyle = (x: number, y: number): string => {
+        let baseStyle = "border border-border/30 flex items-center justify-center aspect-square relative"; // Added relative for icon positioning
+        if (x === playerPos.x && y === playerPos.y) {
+            return `${baseStyle} bg-primary/30`; // Player cell
         }
-        return cells;
+        if (roomStatus === 'pending' && x === eventPos.x && y === eventPos.y) {
+            return `${baseStyle} bg-red-500/50 animate-pulse`; // Event cell
+        }
+        if (x === exitPos.x && y === exitPos.y) {
+            return `${baseStyle} ${roomStatus === 'cleared' ? 'bg-green-500/50' : 'bg-neutral-700/30'}`; // Exit cell (green if cleared)
+        }
+        return `${baseStyle} bg-background-secondary/50`; // Empty cell
     };
 
-    // Helper to get style for positioned elements
-    const getElementStyle = (pos: Position): React.CSSProperties => ({
-        gridColumnStart: pos.x + 1,
-        gridRowStart: pos.y + 1,
-        zIndex: 10, // Ensure elements are above grid lines
-    });
+    // --- Render Grid Cells --- 
+    const renderGridCells = () => {
+      const cells = [];
+      for (let y = 0; y < gridSize.height; y++) {
+        for (let x = 0; x < gridSize.width; x++) {
+          cells.push(
+            <div key={`${x}-${y}`} className={getCellStyle(x, y)}>
+              {/* Simple visual indicators for testing */}
+              {x === playerPos.x && y === playerPos.y && <span className="text-xl">P</span>}
+              {roomStatus === 'pending' && x === eventPos.x && y === eventPos.y && <span className="text-xl">E</span>}
+              {x === exitPos.x && y === exitPos.y && <span className="text-xl">X</span>}
+            </div>,
+          );
+        }
+      }
+      return cells;
+    };
 
-    // --- Render Combat OR Grid ---
+    // --- JSX Return --- 
     return (
-         <Card className="h-[60vh] p-4 flex flex-col"> {/* Keep main card structure */} 
-             {/* Header/Info within the card - Conditionally show based on status? */} 
-            <div className="mb-2 flex justify-between text-xs text-text-secondary">
-                 <span>Depth: {gateData.current_depth} | Room: {gateData.current_room}</span>
-                 <span>Status: {roomStatus}</span>
-             </div>
-
-             {/* --- CONDITIONAL RENDERING --- */}
-             {roomStatus === 'combat' && hunterCombatData && enemyCombatData ? (
-                 // --- Render Combat Interface --- 
-                 <CombatInterface 
-                    gateId={gateId}
-                    hunterData={hunterCombatData}
-                    enemyData={enemyCombatData}
-                    onCombatEnd={handleCombatEnd}
-                 />
-             ) : (
-                 // --- Render Dungeon Grid --- 
-                 <div className="relative flex-grow overflow-hidden border border-border-dark bg-background"> 
-                     {/* The CSS Grid */}
-                     <div 
-                        className="absolute inset-0 grid h-full w-full"
-                        style={{
-                            gridTemplateColumns: `repeat(${gridSize.width}, minmax(0, 1fr))`, 
-                            gridTemplateRows: `repeat(${gridSize.height}, minmax(0, 1fr))`,
-                        }}
-                     >
-                         {/* Render the background grid cells */}
-                        {renderGridCells()}
-
-                         {/* Player Element - Placeholder */}
-                         <div 
-                            className="flex items-center justify-center rounded bg-blue-500 text-white text-xs font-bold shadow-md transition-all duration-150 ease-linear"
-                            style={getElementStyle(playerPos)}
-                            aria-label="Player"
-                         >
-                             P
-                        </div>
-
-                         {/* Event Element - Placeholder (Monster/Treasure) */}
-                         {roomStatus === 'pending' && (
-                            <div 
-                                className="flex items-center justify-center rounded bg-yellow-500 text-black text-xs font-bold shadow-md"
-                                style={getElementStyle(eventPos)}
-                                aria-label="Event"
-                            >
-                                ?
-                            </div>
-                         )}
-
-                         {/* Exit Element - Placeholder (Only show if room cleared later) */}
-                         {roomStatus === 'cleared' && ( // Example: Only show when cleared
-                            <div 
-                               className="flex items-center justify-center rounded bg-green-600 text-white text-xs font-bold shadow-md"
-                               style={getElementStyle(exitPos)}
-                               aria-label="Exit"
-                            >
-                               E
-                           </div>
-                         )}
-                     </div>
+        <div className="relative w-full"> {/* Added relative for positioning controls */} 
+            {/* Loading State */}
+            {roomStatus === 'loading' && (
+                 <div className="flex h-[50vh] w-full items-center justify-center">
+                    <Skeleton className="h-64 w-full max-w-lg" />
                  </div>
-             )}
-             {/* ----------------------------- */} 
-        </Card>
+            )}
+
+            {/* Error State */}
+            {roomStatus === 'error' && (
+                <Card className="w-full max-w-md mx-auto border-danger mt-10">
+                    <CardHeader><CardTitle className="text-center text-danger">Error</CardTitle></CardHeader>
+                    <CardContent className="text-center">
+                        <p className="mb-4 text-text-secondary">{error}</p>
+                        <Button variant="secondary" onClick={loadInitialData}>Retry</Button>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* --- Status Bar --- */}
+            {gateData && roomStatus !== 'loading' && roomStatus !== 'error' && (
+                <div className="flex justify-between items-center p-2 mb-4 bg-background-secondary rounded-md shadow text-sm max-w-lg mx-auto">
+                    <span className="text-text-secondary">
+                        Depth: {gateData.current_depth} | Room: {gateData.current_room}
+                    </span>
+                    <span className="text-text-secondary capitalize">
+                        Status: {roomStatus}
+                    </span>
+                </div>
+            )}
+            {/* ------------------ */}
+
+            {/* Combat View */}
+            {roomStatus === 'combat' && hunterCombatData && enemyCombatData && (
+                <div className="h-[70vh]"> {/* Give combat view fixed height */} 
+                    <CombatInterface 
+                        gateId={gateId}
+                        hunterData={hunterCombatData}
+                        enemyData={enemyCombatData}
+                        onCombatEnd={handleCombatEnd}
+                    />
+                </div>
+            )}
+
+            {/* Grid View (only when not in combat) */}
+            {(roomStatus === 'pending' || roomStatus === 'cleared') && (
+                <div 
+                    className="grid gap-1 p-1 bg-background rounded-md shadow-lg border border-border max-w-lg mx-auto"
+                    style={{ 
+                        gridTemplateColumns: `repeat(${gridSize.width}, minmax(0, 1fr))`,
+                    }}
+                >
+                    {renderGridCells()}
+                </div>
+            )}
+            
+            {/* --- On-Screen Movement Controls --- */}
+            {(roomStatus === 'pending' || roomStatus === 'cleared') && ( 
+                <div className="fixed bottom-6 right-6 z-50 grid grid-cols-3 gap-2 w-32">
+                    {/* Empty Top Left */}
+                    <div></div> 
+                    {/* Up Button */}
+                    <Button 
+                        variant="outline" 
+                        size="icon" 
+                        className="col-start-2 bg-background-secondary/80 hover:bg-background-secondary active:bg-border aspect-square backdrop-blur-sm" 
+                        onClick={() => handleMove('up')}
+                        aria-label="Move Up"
+                    >
+                        <ArrowUp className="h-6 w-6" />
+                    </Button>
+                     {/* Empty Top Right */}
+                    <div></div>
+
+                    {/* Left Button */}
+                     <Button 
+                        variant="outline" 
+                        size="icon" 
+                        className="col-start-1 bg-background-secondary/80 hover:bg-background-secondary active:bg-border aspect-square backdrop-blur-sm" 
+                        onClick={() => handleMove('left')}
+                        aria-label="Move Left"
+                    >
+                        <ArrowLeft className="h-6 w-6" />
+                    </Button>
+                     {/* Center Placeholder (Optional) */}
+                     <div className="col-start-2"></div> 
+                    {/* Right Button */}
+                     <Button 
+                        variant="outline" 
+                        size="icon" 
+                        className="col-start-3 bg-background-secondary/80 hover:bg-background-secondary active:bg-border aspect-square backdrop-blur-sm" 
+                        onClick={() => handleMove('right')}
+                        aria-label="Move Right"
+                    >
+                        <ArrowRight className="h-6 w-6" />
+                    </Button>
+
+                     {/* Empty Bottom Left */}
+                     <div></div> 
+                    {/* Down Button */}
+                     <Button 
+                        variant="outline" 
+                        size="icon" 
+                        className="col-start-2 bg-background-secondary/80 hover:bg-background-secondary active:bg-border aspect-square backdrop-blur-sm" 
+                        onClick={() => handleMove('down')}
+                        aria-label="Move Down"
+                    >
+                        <ArrowDown className="h-6 w-6" />
+                    </Button>
+                     {/* Empty Bottom Right */}
+                    <div></div>
+                </div>
+            )}
+        </div>
     );
 } 
