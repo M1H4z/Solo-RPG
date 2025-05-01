@@ -102,39 +102,39 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
     // --- Refactored Movement Logic ---
     const handleMove = useCallback((direction: 'up' | 'down' | 'left' | 'right') => {
         // Only allow movement when pending or cleared
-        if (!gateData || (roomStatus !== 'pending' && roomStatus !== 'cleared')) return;
+            if (!gateData || (roomStatus !== 'pending' && roomStatus !== 'cleared')) return;
 
-        setPlayerPos(currentPos => {
-            let nextPos = { ...currentPos };
+            setPlayerPos(currentPos => {
+                let nextPos = { ...currentPos };
 
             switch (direction) {
                 case 'up':
-                    nextPos.y -= 1;
-                    break;
+                        nextPos.y -= 1;
+                        break;
                 case 'down':
-                    nextPos.y += 1;
-                    break;
+                        nextPos.y += 1;
+                        break;
                 case 'left':
-                    nextPos.x -= 1;
-                    break;
+                        nextPos.x -= 1;
+                        break;
                 case 'right':
-                    nextPos.x += 1;
-                    break;
-            }
+                        nextPos.x += 1;
+                        break;
+                }
 
-            // Boundary Checks
-            if (
-                nextPos.x < 0 ||
-                nextPos.x >= gridSize.width ||
-                nextPos.y < 0 ||
-                nextPos.y >= gridSize.height
-            ) {
-                return currentPos; 
-            }
+                // Boundary Checks
+                if (
+                    nextPos.x < 0 ||
+                    nextPos.x >= gridSize.width ||
+                    nextPos.y < 0 ||
+                    nextPos.y >= gridSize.height
+                ) {
+                    return currentPos; 
+                }
 
             console.log(`Moved ${direction} to: (${nextPos.x}, ${nextPos.y})`);
-            return nextPos;
-        });
+                return nextPos;
+            });
     }, [gateData, roomStatus, gridSize]); // Add gridSize dependency
 
     // --- Keyboard Movement Listener ---
@@ -292,20 +292,20 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
 
     // --- Render Grid Cells --- 
     const renderGridCells = () => {
-      const cells = [];
-      for (let y = 0; y < gridSize.height; y++) {
-        for (let x = 0; x < gridSize.width; x++) {
-          cells.push(
+        const cells = [];
+        for (let y = 0; y < gridSize.height; y++) {
+            for (let x = 0; x < gridSize.width; x++) {
+                cells.push(
             <div key={`${x}-${y}`} className={getCellStyle(x, y)}>
               {/* Simple visual indicators for testing */}
               {x === playerPos.x && y === playerPos.y && <span className="text-xl">P</span>}
               {roomStatus === 'pending' && x === eventPos.x && y === eventPos.y && <span className="text-xl">E</span>}
               {x === exitPos.x && y === exitPos.y && <span className="text-xl">X</span>}
             </div>,
-          );
+                );
+            }
         }
-      }
-      return cells;
+        return cells;
     };
 
     // --- JSX Return --- 
@@ -338,19 +338,19 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                     <span className="text-text-secondary capitalize">
                         Status: {roomStatus}
                     </span>
-                </div>
+             </div>
             )}
             {/* ------------------ */}
 
             {/* Combat View */}
             {roomStatus === 'combat' && hunterCombatData && enemyCombatData && (
                 <div className="h-[70vh]"> {/* Give combat view fixed height */} 
-                    <CombatInterface 
-                        gateId={gateId}
-                        hunterData={hunterCombatData}
-                        enemyData={enemyCombatData}
-                        onCombatEnd={handleCombatEnd}
-                    />
+                 <CombatInterface 
+                    gateId={gateId}
+                    hunterData={hunterCombatData}
+                    enemyData={enemyCombatData}
+                    onCombatEnd={handleCombatEnd}
+                 />
                 </div>
             )}
 
@@ -358,14 +358,14 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
             {(roomStatus === 'pending' || roomStatus === 'cleared') && (
                 <div 
                     className="grid gap-1 p-1 bg-background rounded-md shadow-lg border border-border max-w-lg mx-auto"
-                    style={{ 
-                        gridTemplateColumns: `repeat(${gridSize.width}, minmax(0, 1fr))`,
-                    }}
-                >
-                    {renderGridCells()}
-                </div>
-            )}
-            
+                        style={{
+                            gridTemplateColumns: `repeat(${gridSize.width}, minmax(0, 1fr))`, 
+                        }}
+                     >
+                        {renderGridCells()}
+                            </div>
+                         )}
+
             {/* --- On-Screen Movement Controls --- */}
             {(roomStatus === 'pending' || roomStatus === 'cleared') && ( 
                 <div className="fixed bottom-6 right-6 z-50 grid grid-cols-3 gap-2 w-32">
@@ -416,13 +416,13 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                         className="col-start-2 bg-background-secondary/80 hover:bg-background-secondary active:bg-border aspect-square backdrop-blur-sm" 
                         onClick={() => handleMove('down')}
                         aria-label="Move Down"
-                    >
+                            >
                         <ArrowDown className="h-6 w-6" />
                     </Button>
                      {/* Empty Bottom Right */}
                     <div></div>
-                </div>
-            )}
-        </div>
+                           </div>
+                         )}
+                     </div>
     );
 } 

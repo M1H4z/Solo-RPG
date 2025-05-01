@@ -152,12 +152,18 @@ export default function CombatInterface({
         if (!playerTurn || combatPhase !== 'fighting' || isProcessingAction) return;
         setIsProcessingAction(true); // Prevent other actions while fleeing
         addLog(`${hunterData.name} attempts to flee...`);
-        // Add a small delay? Then callback
+
+        // Trigger flee animation
+        setPlayerAnimation('flee');
+
+        // Wait for flee animation to finish before calling onCombatEnd
+        // Values from PlayerSprite.tsx
+        const fleeAnimationDuration = 4 * 200; // totalFleeFrames * fleeFrameDuration
         setTimeout(() => {
             toast.success("Successfully fled (simulated)!");
             onCombatEnd('flee');
             // No need to setIsProcessingAction(false) as component unmounts
-        }, 500);
+        }, fleeAnimationDuration + 250); // Wait for animation + LONGER buffer (800 + 250 = 1050ms)
      };
 
     const handleEnemyTurn = () => {
