@@ -394,16 +394,37 @@ function InventoryContent() {
   };
 
   const handleUseItem = async (inventoryId: string) => {
-    if (!hunterId || !selectedItem || selectedItem.inventoryId !== inventoryId)
-      return;
-    const itemToUse = selectedItem;
+    if (!hunterId) return;
+    if (actionLoading[inventoryId]) return; // Prevent double clicks
+
+    console.log(`Attempting to use item: ${inventoryId}`);
     setItemActionLoading(inventoryId, true);
-    setError(null);
-    console.log(`Attempting to use item: ${itemToUse.name} (${inventoryId})`);
-    await new Promise((res) => setTimeout(res, 500)); // Simulate API call
-    toast.info(`Used ${itemToUse.name}! (WIP)`);
-    setItemActionLoading(inventoryId, false);
-    setSelectedItem(null);
+
+    try {
+      const response = await fetch('/api/items/use', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hunterId, inventoryInstanceId: inventoryId }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || `Failed to use item (status: ${response.status})`);
+      }
+
+      // Success
+      toast.success(result.message || 'Item used successfully!');
+      await loadData(); // Refetch data to update inventory quantity and potentially hunter stats
+      // If a details panel is open showing this item, maybe close it or update it?
+      // setSelectedItem(null); // Optionally close details panel after use
+
+    } catch (err: any) {
+      console.error(`Use item error (${inventoryId}):`, err);
+      toast.error(`Failed to use item: ${err.message}`);
+    } finally {
+      setItemActionLoading(inventoryId, false);
+    }
   };
 
   const handleDropItem = async (inventoryId: string, itemName: string) => {

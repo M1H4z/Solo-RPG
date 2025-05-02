@@ -1,4 +1,10 @@
-import { getLootTable, LootDrop, LootResult } from '@/constants/lootTables.constants';
+import { getLootTable, LootDrop } from '@/constants/lootTables.constants';
+
+// Export the type
+export type LootResult = {
+    droppedItems: LootDrop[];
+    droppedGold: number;
+};
 
 interface LootContext {
     enemyId: string;
