@@ -9,6 +9,7 @@ import { Swords, ShoppingBag, Sparkles, DoorOpen, Star } from 'lucide-react';
 import VictoryRewardsPopup from './VictoryRewardsPopup';
 import PlayerSprite, { PlayerAnimationState } from './PlayerSprite'; // Import PlayerSprite
 import EnemySprite, { EnemyAnimationState } from './EnemySprite'; // Import EnemySprite
+import { calculateDamage } from '@/lib/combat/damageCalculator'; // <-- Import the calculator
 
 // Updated interfaces
 interface EnemyCombatEntity {
@@ -31,20 +32,24 @@ interface PlayerCombatEntity {
     defense: number;     
     currentExp: number;      // Added Player EXP
     expToNextLevel: number; // Added Player EXP Goal
+    critRate: number;
+    critDamage: number;
+    precision: number;
+    // Add progress within current level
+    expProgressInCurrentLevel: number;
 }
 
 interface CombatInterfaceProps {
     gateId: string;
-    hunterData: PlayerCombatEntity; // Use specific type
-    enemyData: EnemyCombatEntity;   // Use specific type
-    onCombatEnd: (result: 'win' | 'loss' | 'flee') => void;
+    hunterData: PlayerCombatEntity;
+    enemyData: EnemyCombatEntity;
+    onCombatResolved: (result: 'win' | 'loss' | 'flee', payload?: { expGained?: number, finalPlayerHp?: number }) => void;
 }
 
 // State to hold mutable combat values
 interface CombatState {
     playerHp: number;
     enemyHp: number;
-    playerExp: number;
 }
 
 // New state for combat phases
@@ -54,7 +59,7 @@ export default function CombatInterface({
     gateId, 
     hunterData, 
     enemyData, 
-    onCombatEnd 
+    onCombatResolved 
 }: CombatInterfaceProps) {
     // --- Component State ---
     const [messageLog, setMessageLog] = useState<string[]>([`A wild ${enemyData.name} appeared!`]);
@@ -62,7 +67,6 @@ export default function CombatInterface({
     const [combatState, setCombatState] = useState<CombatState>({
         playerHp: hunterData.currentHp,
         enemyHp: enemyData.currentHp,
-        playerExp: hunterData.currentExp
     });
     const [combatPhase, setCombatPhase] = useState<CombatPhase>('fighting'); // Added phase state
     const [expGainedThisFight, setExpGainedThisFight] = useState<number>(0); // Store calculated EXP gain
@@ -84,51 +88,60 @@ export default function CombatInterface({
     const handleAttack = () => { 
         if (!playerTurn || combatPhase !== 'fighting' || isProcessingAction) return;
         setIsProcessingAction(true);
-
-        // Trigger attack animation (includes movement)
         setPlayerAnimation('attack');
-        
-        // Wait for animation (frames only now) to finish before calculating damage
+
         setTimeout(() => {
-            // Reset animation state back to idle *after* sequence completes visually
             setPlayerAnimation('idle');
-            
-            const damageDealt = Math.max(0, hunterData.attackPower - enemyData.defense);
+
+            // Use the new damage calculator for player attack
+            const damageDealt = calculateDamage({
+                attacker: {
+                    level: hunterData.level,
+                    attackPower: hunterData.attackPower,
+                    // Use derived stats from props
+                    critRate: hunterData.critRate,
+                    critDamage: hunterData.critDamage,
+                    precision: hunterData.precision,
+                },
+                defender: {
+                    defense: enemyData.defense,
+                },
+                action: {
+                    actionPower: 10, // Placeholder power for basic attack
+                },
+            });
+
             addLog(`${hunterData.name} attacks ${enemyData.name} for ${damageDealt} damage!`);
-
             const newEnemyHp = Math.max(0, combatState.enemyHp - damageDealt);
-
-            // Trigger enemy hit flash
             setEnemyIsHit(true);
-            setTimeout(() => setEnemyIsHit(false), 150); // Flash duration
+            setTimeout(() => setEnemyIsHit(false), 150);
 
             if (newEnemyHp === 0) {
                 // --- Victory --- 
                 addLog(`${enemyData.name} has been defeated!`);
-                setEnemyAnimation('defeat'); // Trigger defeat animation
+                    setEnemyAnimation('defeat'); // Trigger defeat animation
                 
                 const calculatedExpGained = Math.max(1, Math.floor(enemyData.baseExpYield * enemyData.level / hunterData.level)); 
-                const finalPlayerExp = combatState.playerExp + calculatedExpGained;
                 setExpGainedThisFight(calculatedExpGained);
                 addLog(`${hunterData.name} gained ${calculatedExpGained} EXP!`);
                 
                 setCombatState(prev => ({ 
                     ...prev, 
-                    enemyHp: 0,
-                    playerExp: finalPlayerExp
+                    enemyHp: 0
                 }));
                 setCombatPhase('exp_gaining'); 
 
+                // Set timeout to show rewards popup
                 setTimeout(() => {
                     setCombatPhase('showing_rewards');
-                    setIsProcessingAction(false); 
-                }, 3000);
+                    setIsProcessingAction(false); // Allow interaction with rewards popup
+                }, 1500); // Shortened delay before showing rewards popup (adjust as needed)
                 return; 
             } else {
                  // Enemy survives - Trigger hurt animation
                  setEnemyAnimation('hurt');
-                 setCombatState(prev => ({ ...prev, enemyHp: newEnemyHp }));
-                 setPlayerTurn(false);
+             setCombatState(prev => ({ ...prev, enemyHp: newEnemyHp }));
+             setPlayerTurn(false);
                  // Reset enemy animation back to idle after hurt duration
                  setTimeout(() => {
                     setEnemyAnimation('idle');
@@ -160,9 +173,8 @@ export default function CombatInterface({
         // Values from PlayerSprite.tsx
         const fleeAnimationDuration = 4 * 200; // totalFleeFrames * fleeFrameDuration
         setTimeout(() => {
-            toast.success("Successfully fled (simulated)!");
-            onCombatEnd('flee');
-            // No need to setIsProcessingAction(false) as component unmounts
+        toast.success("Successfully fled (simulated)!");
+        onCombatResolved('flee', { finalPlayerHp: combatState.playerHp });
         }, fleeAnimationDuration + 250); // Wait for animation + LONGER buffer (800 + 250 = 1050ms)
      };
 
@@ -172,9 +184,25 @@ export default function CombatInterface({
             return;
         }
         
-        const damageReceived = Math.max(0, enemyData.attackPower - hunterData.defense);
+        // Use the new damage calculator for enemy attack
+        const damageReceived = calculateDamage({
+            attacker: {
+                level: enemyData.level,
+                attackPower: enemyData.attackPower,
+                critRate: 5, // Placeholder for enemy crit rate
+                critDamage: 1.5, // Placeholder for enemy crit damage
+                precision: 0, // Placeholder for enemy precision
+            },
+            defender: {
+                defense: hunterData.defense,
+            },
+            action: {
+                actionPower: 10, // Placeholder power for basic attack
+            },
+        });
+
         addLog(`${enemyData.name} attacks ${hunterData.name} for ${damageReceived} damage!`);
-        
+
         setEnemyAnimation('attack');
         
         // Calculate the new HP but DON'T update state yet
@@ -190,29 +218,32 @@ export default function CombatInterface({
              setTimeout(() => setPlayerIsHit(false), 150); // Flash duration
 
              // Update player HP state NOW, after animation
-             setCombatState(prev => ({ ...prev, playerHp: newPlayerHp })); 
+        setCombatState(prev => ({ ...prev, playerHp: newPlayerHp }));
 
-            if (newPlayerHp === 0) {
-                // --- Defeat --- 
-                addLog(`${hunterData.name} has been defeated!`);
+        if (newPlayerHp === 0) {
+            // --- Defeat --- 
+            addLog(`${hunterData.name} has been defeated!`);
                 setCombatPhase('loss');
-                setTimeout(() => {
-                    toast.error("Defeat!"); 
-                    onCombatEnd('loss'); 
+             setTimeout(() => {
+                toast.error("Defeat!");
+                onCombatResolved('loss', { finalPlayerHp: newPlayerHp });
                 }, 1000); 
-                return; 
-            }
+            return; 
+        }
             // If not defeated, allow player turn
-            setPlayerTurn(true);
+        setPlayerTurn(true);
             setIsProcessingAction(false); // Re-enable player actions
         }, enemyAttackDuration + 50); // Wait for animation + small buffer (1200 + 50 = 1250ms)
     };
 
     // --- Rewards Popup Handler ---
     const handleVictoryContinue = () => {
-        console.log("Continuing after victory...");
-        toast.success("Victory!"); 
-        onCombatEnd('win');
+        console.log("Victory popup continue clicked. Resolving combat as win.");
+        // Pass final HP and EXP on win confirmation
+        onCombatResolved('win', {
+            expGained: expGainedThisFight,
+            finalPlayerHp: combatState.playerHp
+        });
     };
 
     // --- Determine if buttons should be disabled --- 
@@ -231,7 +262,7 @@ export default function CombatInterface({
         >
             {/* Semi-transparent white overlay to brighten background */}
             <div className="absolute inset-0 bg-white/10 z-0"></div>
-
+            
             {/* Enemy Info Box (Top Right Corner) */}
             <div className="absolute top-2 right-2 w-48 p-1 md:top-4 md:right-4 md:w-64 md:p-2 bg-background-secondary rounded-md shadow-md border border-border-accent z-20">
                 <div className="flex justify-between items-center mb-0.5 md:mb-1">
@@ -265,7 +296,7 @@ export default function CombatInterface({
                      {combatState.playerHp} / {hunterData.maxHp}
                  </div>
                  <Progress 
-                    value={(combatState.playerExp / hunterData.expToNextLevel) * 100}
+                    value={(hunterData.expProgressInCurrentLevel / hunterData.expToNextLevel) * 100}
                     className="h-1.5 w-full bg-neutral-700 border border-border transition-transform duration-3000 ease-linear"
                     aria-label={`${hunterData.name} EXP`} 
                  />

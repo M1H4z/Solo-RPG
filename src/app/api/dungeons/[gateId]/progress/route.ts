@@ -34,9 +34,9 @@ export async function PUT(request: Request, { params }: RouteParams) {
         // 3. Fetch the current active gate, ensuring ownership
         const { data: currentGate, error: fetchError } = await supabase
             .from('active_gates')
-            .select('*, hunters(user_id)') // Include hunter for auth check
+            .select('*, hunters(user_id), current_room_status')
             .eq('id', gateId)
-            .maybeSingle();
+            .maybeSingle<ActiveGate & { hunters: { user_id: string } | null, current_room_status: string | null }>();
 
         if (fetchError) {
             console.error('Error fetching gate for progress:', fetchError);
@@ -57,6 +57,14 @@ export async function PUT(request: Request, { params }: RouteParams) {
         if (new Date(currentGate.expires_at) < new Date()) {
             return NextResponse.json({ error: 'This gate has expired.' }, { status: 410 });
         }
+
+        // ---> ADDED CHECK: Ensure the current room is marked as cleared
+        // This assumes another process (e.g., after combat victory) updates this status.
+        if (currentGate.current_room_status !== 'cleared') {
+             console.warn(`Attempt to progress gate ${gateId} from room ${currentGate.current_depth}-${currentGate.current_room} without clearing. Status: ${currentGate.current_room_status}`);
+            return NextResponse.json({ error: 'Current room must be cleared before progressing.' }, { status: 400 }); // Bad Request or 403 Forbidden could also fit
+        }
+        // <--- END ADDED CHECK
 
         // 4. Calculate next room/depth
         let nextRoom = currentGate.current_room + 1;
@@ -84,7 +92,7 @@ export async function PUT(request: Request, { params }: RouteParams) {
             .update({ 
                 current_room: nextRoom,
                 current_depth: nextDepth,
-                // Reset any room-specific state if needed in the future
+                current_room_status: 'pending'
             })
             .eq('id', gateId)
             .select() // Return the updated row

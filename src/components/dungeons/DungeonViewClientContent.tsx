@@ -4,11 +4,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation'; // Keep router for potential navigation
 import { Database } from '@/lib/supabase/database.types';
 import { toast } from 'sonner';
-import { Card, CardContent } from '@/components/ui/Card'; // For styling the view area
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'; // For styling the view area
 import { Skeleton } from '@/components/ui/skeleton'; // For loading state
 import { Button } from '@/components/ui/Button'; // Corrected casing
 import CombatInterface from '@/components/combat/CombatInterface'; // <-- Import CombatInterface
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Hunter } from '@/types/hunter.types'; // Import full Hunter type
+import { calculateDerivedStats } from '@/lib/game/stats'; // Import our main stat calculator
 
 // Match interface structure from CombatInterface
 interface EnemyCombatEntity {
@@ -31,6 +33,10 @@ interface PlayerCombatEntity {
     defense: number;
     currentExp: number;
     expToNextLevel: number;
+    critRate: number;
+    critDamage: number;
+    precision: number;
+    expProgressInCurrentLevel: number;
 }
 
 // Type for the active gate data
@@ -53,12 +59,11 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
     const [roomStatus, setRoomStatus] = useState<RoomStatus>('loading');
     const [error, setError] = useState<string | null>(null);
 
-    // --- Combat State ---
-    // TODO: Fetch real hunter data based on hunterId
-    const [hunterCombatData, setHunterCombatData] = useState<PlayerCombatEntity | null>(null);
-    // TODO: Determine enemy based on gateData, depth, room
-    const [enemyCombatData, setEnemyCombatData] = useState<EnemyCombatEntity | null>(null);
+    // --- State for Full Hunter Data & Derived Stats for Combat ---
+    const [fullHunterData, setFullHunterData] = useState<Hunter | null>(null); // Store the full hunter object
+    const [playerCombatStats, setPlayerCombatStats] = useState<PlayerCombatEntity | null>(null); // Store the calculated stats for combat
     // -------------------
+    const [enemyCombatData, setEnemyCombatData] = useState<EnemyCombatEntity | null>(null);
 
     // --- Static for now, make dynamic later ---
     const gridSize: GridSize = { width: 7, height: 7 }; 
@@ -67,33 +72,68 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
     const [exitPos, setExitPos] = useState<Position>({ x: gridSize.width - 1, y: Math.floor(gridSize.height / 2) }); // Start middle-right
     // ---------------------------------------------
 
-    // Fetch Gate/Room Data
+    // Fetch Gate Data AND FULL Hunter Data
     const loadInitialData = useCallback(async () => {
         setRoomStatus('loading');
         setError(null);
+        setGateData(null); // Reset previous data
+        setFullHunterData(null); // Reset previous full hunter data
+        setPlayerCombatStats(null); // Reset combat stats
+
         try {
-            const response = await fetch(`/api/dungeons/${gateId}`);
-            const result = await response.json();
+            // Fetch gate data and full hunter data concurrently
+            const [gateResponse, hunterResponse] = await Promise.all([
+                fetch(`/api/dungeons/${gateId}`),
+                // Fetch FULL hunter data, not just combat stats
+                fetch(`/api/hunters/${hunterId}`)
+            ]);
 
-            if (!response.ok) {
-                throw new Error(result.error || `Failed to load dungeon data (status: ${response.status})`);
+            // Process Gate Data
+            const gateResult = await gateResponse.json();
+            if (!gateResponse.ok) {
+                throw new Error(gateResult.error || `Failed to load dungeon data (status: ${gateResponse.status})`);
             }
-
-            if (!result.activeGate) {
+            if (!gateResult.activeGate) {
                  throw new Error('Active gate data not found.');
             }
-            
-            setGateData(result.activeGate);
+            setGateData(gateResult.activeGate);
+
+            // Process FULL Hunter Data
+            const hunterResult = await hunterResponse.json();
+            if (!hunterResponse.ok) {
+                throw new Error(hunterResult.error || `Failed to load hunter data (status: ${hunterResponse.status})`);
+            }
+            const fetchedHunter = hunterResult.hunter as Hunter;
+            setFullHunterData(fetchedHunter); // Store the full hunter object
+
+            // Calculate combat stats using the fetched hunter data
+            const derivedStats = calculateDerivedStats(fetchedHunter);
+            const combatStats: PlayerCombatEntity = {
+                id: fetchedHunter.id,
+                name: fetchedHunter.name,
+                currentHp: derivedStats.currentHP ?? 0, // Use calculated currentHP
+                maxHp: derivedStats.maxHP ?? 1,
+                level: fetchedHunter.level ?? 1,
+                attackPower: derivedStats.attackPower ?? 0,
+                defense: derivedStats.defense ?? 0,
+                currentExp: fetchedHunter.experience ?? 0,
+                expToNextLevel: derivedStats.expNeededForNextLevel ?? 1,
+                critRate: derivedStats.critRate ?? 0,
+                critDamage: derivedStats.critDamage ?? 1.5, // Default crit damage multiplier
+                precision: derivedStats.precision ?? 0,
+                expProgressInCurrentLevel: derivedStats.expProgressInCurrentLevel ?? 0,
+            };
+            setPlayerCombatStats(combatStats); // Store the stats needed for CombatInterface
+
             // TODO: Based on gateData.current_room, determine event type/position
-            // For now, we use the static initial positions
             setRoomStatus('pending'); // Ready to interact
 
         } catch (err: any) {
-            console.error("Error loading dungeon view:", err);
-            setError(err.message || "Failed to load dungeon information.");
+            console.error("Error loading initial dungeon/hunter data:", err);
+            setError(err.message || "Failed to load necessary information.");
             setRoomStatus('error');
         } 
-    }, [gateId]);
+    }, [gateId, hunterId]);
 
     useEffect(() => {
         loadInitialData();
@@ -174,18 +214,15 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
         if (roomStatus === 'pending' && playerPos.x === eventPos.x && playerPos.y === eventPos.y) {
             console.log("Player landed on event tile! Initiating Combat...");
             
-            // --- Setup Placeholder Combat Data with Stats & EXP ---
-            // TODO: Fetch real hunter/enemy data
-            setHunterCombatData({ 
-                id: hunterId, 
-                name: 'Hero', 
-                currentHp: 90, maxHp: 100, 
-                level: 5, 
-                attackPower: 15, 
-                defense: 8,     
-                currentExp: 30,      // Example EXP
-                expToNextLevel: 100  // Example EXP Goal
-            });
+            // Check if player combat stats are calculated and ready
+            if (!playerCombatStats) { // Use the calculated stats state
+                console.error("Cannot start combat: Player combat stats not calculated.");
+                toast.error("Error starting combat", { description: "Player stats missing. Try reloading." });
+                setRoomStatus('error');
+                return;
+            }
+            
+            // TODO: Fetch real enemy data based on gate/depth/room
             setEnemyCombatData({ 
                 id: 'goblin-1', 
                 name: 'Goblin Scout', 
@@ -193,11 +230,11 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                 level: 3,
                 attackPower: 10, 
                 defense: 5,     
-                baseExpYield: 25     // Example EXP Yield
+                baseExpYield: 25
             });
             // ----------------------------------------------
             
-            setRoomStatus('combat'); 
+            setRoomStatus('combat'); // Set status to combat only AFTER data is ready
         }
 
         // Check for moving onto the exit tile *after* the room is cleared
@@ -247,31 +284,142 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
             return; // Action taken
         }
 
-    }, [playerPos, eventPos, exitPos, roomStatus, loadInitialData, gridSize.height, gateId, router, hunterId]); // Added hunterId
+    }, [playerPos, eventPos, exitPos, roomStatus, loadInitialData, gridSize.height, gateId, router, hunterId, playerCombatStats]); // Added playerCombatStats
 
     // --- Combat End Handler ---
-    const handleCombatEnd = (result: 'win' | 'loss' | 'flee') => {
-        console.log(`Combat ended with result: ${result}`);
-        // TODO: Implement proper handling for loss/flee (penalties, redirect?)
-        if (result === 'win') {
-            toast.success("Victory!", { description: "The path forward is clear." });
-            setRoomStatus('cleared');
-             // TODO: Grant EXP and Loot here
-        } else if (result === 'flee') {
-            toast.warning("Fled!", { description: "You escaped the encounter." });
-            // Reset to pending, maybe move player back?
-            setRoomStatus('pending'); 
-             setPlayerPos(prev => ({ ...prev, x: Math.max(0, prev.x - 1) })); // Simple move back left
-        } else { // loss
-            toast.error("Defeated!", { description: "Returning to safety... (Not implemented)" });
-            // For now, just clear the room to avoid getting stuck
-            setRoomStatus('cleared'); 
-             // TODO: Implement death penalty, revive logic, possibly redirect
+    const handleCombatResolved = async (result: 'win' | 'loss' | 'flee', payload?: { expGained?: number, finalPlayerHp?: number }) => {
+        console.log(`Combat resolved with result: ${result}, payload:`, payload);
+
+        // --- Save Final HP FIRST ---
+        if (payload?.finalPlayerHp !== undefined) {
+            try {
+                toast.info("Saving final HP...");
+                const hpUpdateResponse = await fetch(`/api/hunters/${hunterId}/update-current-stats`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ currentHp: payload.finalPlayerHp })
+                });
+                const hpUpdateResult = await hpUpdateResponse.json();
+                if (!hpUpdateResponse.ok) {
+                    // Log error, but maybe don't block progression? Depends on design.
+                    console.error("Error saving final HP:", hpUpdateResult.error);
+                    toast.error("Failed to save final HP state", { description: hpUpdateResult.error });
+                    // If saving HP fails, should we stop? For now, let's continue but log it.
+                } else {
+                     console.log("Final HP saved successfully.");
+                }
+            } catch (err: any) {
+                console.error("Unexpected error saving final HP:", err);
+                toast.error("Failed to save final HP state", { description: err.message });
+                // Continue processing even if HP save fails?
+            }
         }
-        // Clear combat data
+        // --- End HP Save ---
+
+        // Reset enemy
         setEnemyCombatData(null);
-        // Keep hunter data potentially for next fight? Or clear it too?
-        // setHunterCombatData(null); 
+
+        if (result === 'win') {
+            let gainedExpSuccessfully = false;
+            // --- Mark Room as Cleared on Backend FIRST ---
+            try {
+                setRoomStatus('loading');
+                toast.info("Saving room clear status...");
+                const clearRoomResponse = await fetch(`/api/dungeons/${gateId}/clear-room`, { method: 'PUT' });
+                const clearRoomResult = await clearRoomResponse.json();
+                if (!clearRoomResponse.ok) throw new Error(clearRoomResult.error || `Failed to mark room as cleared`);
+                console.log("Room successfully marked as cleared on backend.");
+
+                // --- Award Experience --- 
+                const expToAward = payload?.expGained;
+                if (expToAward && expToAward > 0) {
+                    toast.info(`Awarding ${expToAward} EXP...`);
+                    const gainExpResponse = await fetch(`/api/hunters/${hunterId}/gain-exp`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ experienceGained: expToAward }),
+                    });
+                    const gainExpResult = await gainExpResponse.json();
+                    if (!gainExpResponse.ok) {
+                        // Log error but don't necessarily stop progression if clearing room worked
+                        console.error("Error awarding EXP:", gainExpResult.error);
+                        toast.error("Failed to award EXP", { description: gainExpResult.error });
+                        // gainedExpSuccessfully remains false
+                    } else {
+                        toast.success(
+                            `${gainExpResult.message}${gainExpResult.levelUp ? ` | Leveled up to ${gainExpResult.newLevel}!` : ""}`
+                        );
+                        gainedExpSuccessfully = true;
+                        // Use the hunter data returned from gain-exp if available
+                        if (gainExpResult.updatedHunter) {
+                             setFullHunterData(gainExpResult.updatedHunter as Hunter);
+                        }
+                    }
+                } else {
+                    console.log("No EXP to award or payload missing.");
+                    gainedExpSuccessfully = true; // Consider it successful if no EXP needed awarding
+                }
+
+            } catch (err: any) {
+                console.error("Error during post-combat processing (clear room or gain exp):", err);
+                toast.error("Failed to process combat results", { description: err.message });
+                // If clearing failed, progression might be blocked. If EXP failed, it's less critical for progression.
+                // Setting status to cleared optimistically so player isn't stuck if only EXP failed.
+                setRoomStatus('cleared'); 
+                return; 
+            }
+            // --- End Backend Updates ---
+
+            // --- Refetch Hunter Data ONLY if gain-exp didn't return it OR if gain-exp failed ---
+            if (!gainedExpSuccessfully || !(payload?.expGained && payload.expGained > 0)) {
+                 try {
+                    toast.info("Updating hunter stats...");
+                    const response = await fetch(`/api/hunters/${hunterId}`);
+                    const hunterResult = await response.json();
+                    if (!response.ok) throw new Error(hunterResult.error || 'Failed to refetch hunter after win');
+                    setFullHunterData(hunterResult.hunter as Hunter);
+                 } catch (err: any) {
+                     console.error("Error refetching hunter data after combat win:", err);
+                     toast.error("Error updating stats after win", { description: err.message });
+                      // Fallback: Keep room pending? Or maybe cleared but with potentially stale display stats?
+                     setRoomStatus('cleared'); // Still mark as cleared locally, but stats might be off until next load
+                 }
+            }
+
+            // Recalculate combat stats based on the potentially updated fullHunterData
+            if (fullHunterData) { // Check if fullHunterData is available
+                 const derivedStats = calculateDerivedStats(fullHunterData);
+                 setPlayerCombatStats({
+                    id: fullHunterData.id,
+                    name: fullHunterData.name,
+                    currentHp: derivedStats.currentHP ?? 0, // Use recalculated HP (for level up recovery)
+                    maxHp: derivedStats.maxHP ?? 1,
+                    level: fullHunterData.level ?? 1,
+                    attackPower: derivedStats.attackPower ?? 0,
+                    defense: derivedStats.defense ?? 0,
+                    currentExp: fullHunterData.experience ?? 0,
+                    expToNextLevel: derivedStats.expNeededForNextLevel ?? 1,
+                    critRate: derivedStats.critRate ?? 0,
+                    critDamage: derivedStats.critDamage ?? 1.5,
+                    precision: derivedStats.precision ?? 0,
+                    expProgressInCurrentLevel: derivedStats.expProgressInCurrentLevel ?? 0,
+                 });
+            }
+            // Set status to cleared AFTER backend updates and stat refresh attempt
+            setRoomStatus('cleared');
+
+        } else if (result === 'loss') {
+            toast.error("Defeated!", { description: "Returning to the Gate Hub..." }); // Or apply penalties
+            // TODO: Implement death penalties (EXP loss, etc.)
+            // Redirect back to Gate Hub for now
+            setTimeout(() => router.push(`/gate?hunterId=${hunterId}`), 2000);
+             setRoomStatus('loading'); // Prevent further actions while redirecting
+        } else { // flee
+            toast.info("Escaped!", { description: "Returned to the room entrance." });
+            // Reset player position to entrance, keep room pending
+            setPlayerPos({ x: 0, y: Math.floor(gridSize.height / 2) });
+            setRoomStatus('pending');
+        }
     };
     // ------------------------
 
@@ -343,13 +491,13 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
             {/* ------------------ */}
 
             {/* Combat View */}
-            {roomStatus === 'combat' && hunterCombatData && enemyCombatData && (
+            {roomStatus === 'combat' && playerCombatStats && enemyCombatData && (
                 <div className="h-[70vh]"> {/* Give combat view fixed height */} 
                  <CombatInterface 
                     gateId={gateId}
-                    hunterData={hunterCombatData}
+                    hunterData={playerCombatStats}
                     enemyData={enemyCombatData}
-                    onCombatEnd={handleCombatEnd}
+                    onCombatResolved={handleCombatResolved}
                  />
                 </div>
             )}

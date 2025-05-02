@@ -15,9 +15,12 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Toaster, toast } from "sonner"; // Import sonner
 import HunterStatsAllocator from "@/components/hunters/HunterStatsAllocator"; // Import the new component
-import { calculateDerivedStats } from "@/lib/stats"; // Import from lib/stats.ts
+import { calculateDerivedStats } from "@/lib/game/stats"; // Updated Import Path
 import { Separator } from "@/components/ui/Separator"; // Import Separator
 import RealTimeClock from "@/components/ui/RealTimeClock"; // Removed .tsx
+import { Classes, ClassesData } from "@/constants/classes.constants";
+import { fetcher } from "@/lib/utils";
+import HunterDetailsCard from "./HunterDetailsCard"; // Import the new component
 
 // Define rank requirements (could be moved to constants later)
 const RANK_UP_REQUIREMENTS = {
@@ -278,15 +281,21 @@ function DashboardContent() {
 
                 <div>
                   <p>HP: <span className="font-semibold">{derivedStats.currentHP} / {derivedStats.maxHP}</span></p>
-                  <div className="relative mt-1 h-2 w-full overflow-hidden rounded-full bg-secondary">
-                    <div className="h-full bg-green-500 transition-all duration-300 ease-out" style={{ width: `${((derivedStats.currentHP ?? 0) / (derivedStats.maxHP ?? 1)) * 100}%` }} />
-                  </div>
+                  <progress
+                    className="[&::-webkit-progress-bar]:bg-background-secondary [&::-webkit-progress-value]:bg-green-500 [&::-moz-progress-bar]:bg-green-500 h-2 w-full [&::-webkit-progress-bar]:rounded-lg [&::-webkit-progress-value]:rounded-lg mt-1"
+                    value={derivedStats.currentHP ?? 0}
+                    max={derivedStats.maxHP ?? 1}
+                    aria-label={`HP: ${derivedStats.currentHP} out of ${derivedStats.maxHP}`}
+                  />
                 </div>
                 <div>
                   <p>MP: <span className="font-semibold">{derivedStats.currentMP} / {derivedStats.maxMP}</span></p>
-                  <div className="relative mt-1 h-2 w-full overflow-hidden rounded-full bg-secondary">
-                    <div className="h-full bg-blue-500 transition-all duration-300 ease-out" style={{ width: `${((derivedStats.currentMP ?? 0) / (derivedStats.maxMP ?? 1)) * 100}%` }} />
-                  </div>
+                  <progress
+                    className="[&::-webkit-progress-bar]:bg-background-secondary [&::-webkit-progress-value]:bg-blue-500 [&::-moz-progress-bar]:bg-blue-500 h-2 w-full [&::-webkit-progress-bar]:rounded-lg [&::-webkit-progress-value]:rounded-lg mt-1"
+                    value={derivedStats.currentMP ?? 0}
+                    max={derivedStats.maxMP ?? 1}
+                    aria-label={`MP: ${derivedStats.currentMP} out of ${derivedStats.maxMP}`}
+                  />
                 </div>
                 <div>
                   <p>EXP: <span className="font-semibold">
