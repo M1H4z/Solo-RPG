@@ -10,6 +10,8 @@ import VictoryRewardsPopup from './VictoryRewardsPopup';
 import PlayerSprite, { PlayerAnimationState } from './PlayerSprite'; // Import PlayerSprite
 import EnemySprite, { EnemyAnimationState } from './EnemySprite'; // Import EnemySprite
 import { calculateDamage } from '@/lib/combat/damageCalculator'; // <-- Import the calculator
+import { determineLoot, LootResult } from '@/lib/game/lootService'; // Import loot service
+import { LootDrop } from '@/constants/lootTables.constants'; // Import type
 
 // Updated interfaces
 interface EnemyCombatEntity {
@@ -37,19 +39,26 @@ interface PlayerCombatEntity {
     precision: number;
     // Add progress within current level
     expProgressInCurrentLevel: number;
+    currentMp: number;
+    maxMp: number;
 }
 
 interface CombatInterfaceProps {
     gateId: string;
     hunterData: PlayerCombatEntity;
     enemyData: EnemyCombatEntity;
-    onCombatResolved: (result: 'win' | 'loss' | 'flee', payload?: { expGained?: number, finalPlayerHp?: number }) => void;
+    onCombatResolved: (result: 'win' | 'loss' | 'flee', payload?: { 
+        expGained?: number, 
+        finalPlayerHp?: number,
+        loot?: LootResult // Add loot result
+    }) => void;
 }
 
 // State to hold mutable combat values
 interface CombatState {
     playerHp: number;
     enemyHp: number;
+    playerMp: number;
 }
 
 // New state for combat phases
@@ -67,6 +76,7 @@ export default function CombatInterface({
     const [combatState, setCombatState] = useState<CombatState>({
         playerHp: hunterData.currentHp,
         enemyHp: enemyData.currentHp,
+        playerMp: hunterData.currentMp,
     });
     const [combatPhase, setCombatPhase] = useState<CombatPhase>('fighting'); // Added phase state
     const [expGainedThisFight, setExpGainedThisFight] = useState<number>(0); // Store calculated EXP gain
@@ -75,6 +85,8 @@ export default function CombatInterface({
     const [isProcessingAction, setIsProcessingAction] = useState(false); // Prevent spamming actions
     const [playerIsHit, setPlayerIsHit] = useState(false); // Add player hit state
     const [enemyIsHit, setEnemyIsHit] = useState(false);   // Add enemy hit state
+    // Add state to hold the determined loot for the popup
+    const [determinedLoot, setDeterminedLoot] = useState<LootResult | null>(null);
     // ---------------------
 
     const addLog = (message: string) => {
@@ -129,9 +141,16 @@ export default function CombatInterface({
                     ...prev, 
                     enemyHp: 0
                 }));
+
+                // --- Determine Loot --- 
+                const lootContext = { enemyId: enemyData.id }; // Basic context for now
+                const lootResult = determineLoot(lootContext);
+                setDeterminedLoot(lootResult); // Store for popup display
+                console.log("Determined Loot:", lootResult);
+                // --- End Determine Loot ---
+                
                 setCombatPhase('exp_gaining'); 
 
-                // Set timeout to show rewards popup
                 setTimeout(() => {
                     setCombatPhase('showing_rewards');
                     setIsProcessingAction(false); // Allow interaction with rewards popup
@@ -174,7 +193,8 @@ export default function CombatInterface({
         const fleeAnimationDuration = 4 * 200; // totalFleeFrames * fleeFrameDuration
         setTimeout(() => {
         toast.success("Successfully fled (simulated)!");
-        onCombatResolved('flee', { finalPlayerHp: combatState.playerHp });
+        // Pass final HP on flee, no loot
+        onCombatResolved('flee', { finalPlayerHp: combatState.playerHp }); 
         }, fleeAnimationDuration + 250); // Wait for animation + LONGER buffer (800 + 250 = 1050ms)
      };
 
@@ -226,7 +246,8 @@ export default function CombatInterface({
                 setCombatPhase('loss');
              setTimeout(() => {
                 toast.error("Defeat!");
-                onCombatResolved('loss', { finalPlayerHp: newPlayerHp });
+                // Pass final HP (0) on loss, no loot
+                onCombatResolved('loss', { finalPlayerHp: newPlayerHp }); 
                 }, 1000); 
             return; 
         }
@@ -239,10 +260,11 @@ export default function CombatInterface({
     // --- Rewards Popup Handler ---
     const handleVictoryContinue = () => {
         console.log("Victory popup continue clicked. Resolving combat as win.");
-        // Pass final HP and EXP on win confirmation
+        // Pass final HP, EXP, and determined Loot on win confirmation
         onCombatResolved('win', {
             expGained: expGainedThisFight,
-            finalPlayerHp: combatState.playerHp
+            finalPlayerHp: combatState.playerHp, 
+            loot: determinedLoot ?? { droppedItems: [], droppedGold: 0 } // Pass determined loot
         });
     };
 
@@ -271,7 +293,7 @@ export default function CombatInterface({
                 </div>
                 <Progress 
                     value={(combatState.enemyHp / enemyData.maxHp) * 100}
-                    className="h-2 w-full bg-neutral-700 border border-border" 
+                    className="h-2 w-full bg-neutral-700 border border-border [&>div]:bg-green-600" 
                     aria-label={`${enemyData.name} HP`} 
                 />
             </div>
@@ -283,21 +305,37 @@ export default function CombatInterface({
 
             {/* Player Info Box (Bottom Left Corner, raised slightly) */}
             <div className="absolute bottom-20 left-2 w-48 p-1 md:bottom-16 md:left-4 md:w-64 md:p-2 bg-background-secondary rounded-md shadow-md border border-border-accent z-20">
+                 {/* Name & Level */}
                  <div className="flex justify-between items-center mb-0.5 md:mb-1">
                     <span className="font-semibold text-sm md:text-base uppercase text-text-primary">{hunterData.name}</span>
                     <span className="text-xs md:text-sm text-text-secondary">Lv.{hunterData.level}</span>
                  </div>
+                 {/* HP Bar & Text */}
                  <Progress 
                     value={(combatState.playerHp / hunterData.maxHp) * 100}
-                    className="h-2 w-full bg-neutral-700 border border-border mb-1"
+                    className="h-2 w-full bg-neutral-700 border border-border mb-0.5 [&>div]:bg-green-600"
                     aria-label={`${hunterData.name} HP`} 
                  />
-                 <div className="text-[10px] md:text-xs text-text-secondary mt-0.5 md:mt-1 text-right mb-1 md:mb-2">
+                 <div className="text-[10px] md:text-xs text-text-secondary mt-0 text-right mb-1 md:mb-1.5">
                      {combatState.playerHp} / {hunterData.maxHp}
                  </div>
+                 {/* MP Bar & Text */}
+                 <Progress 
+                    value={(combatState.playerMp / hunterData.maxMp) * 100}
+                    className="h-2 w-full bg-neutral-700 border border-border mb-0.5"
+                    aria-label={`${hunterData.name} MP`} 
+                 />
+                 <div className="text-[10px] md:text-xs text-text-secondary mt-0 text-right">
+                     {combatState.playerMp} / {hunterData.maxMp}
+                 </div>
+            </div>
+
+            {/* Separate Container for EXP Bar - Positioned directly below the main info box */}
+            <div className="absolute bottom-[74px] left-2 w-48 md:bottom-[58px] md:left-4 md:w-64 z-20 px-1 md:px-2"> 
                  <Progress 
                     value={(hunterData.expProgressInCurrentLevel / hunterData.expToNextLevel) * 100}
-                    className="h-1.5 w-full bg-neutral-700 border border-border transition-transform duration-3000 ease-linear"
+                    // Remove top border by specifying only bottom, left, right borders
+                    className="h-1.5 w-full bg-neutral-700 border-b border-l border-r border-border [&>div]:bg-sky-400" 
                     aria-label={`${hunterData.name} EXP`} 
                  />
             </div>
@@ -342,11 +380,12 @@ export default function CombatInterface({
             )}
 
             {/* Conditionally Render Victory Popup - Remove wrapper div */}
-            {combatPhase === 'showing_rewards' && (
+            {combatPhase === 'showing_rewards' && determinedLoot && (
                 <VictoryRewardsPopup 
                     expGained={expGainedThisFight}
-                    // goldGained={...} // TODO: Pass real data later
-                    // itemsDropped={...} // TODO: Pass real data later
+                    // Pass determined loot to the popup
+                    goldGained={determinedLoot.droppedGold}
+                    itemsDropped={determinedLoot.droppedItems}
                     onContinue={handleVictoryContinue}
                 />
             )}

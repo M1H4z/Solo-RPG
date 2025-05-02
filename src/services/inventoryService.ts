@@ -275,6 +275,7 @@ export async function addInventoryItem(
 
     if (baseItem.stackable) {
       // 2a. Try to increment quantity for existing stackable item
+      console.log(`[addInventoryItem] Item ${itemId} is stackable. Checking for existing stack for hunter ${hunterId}...`);
       const { data: existingItem, error: findError } = await supabase
         .from("hunter_inventory_items")
         .select("instance_id, quantity")
@@ -282,32 +283,50 @@ export async function addInventoryItem(
         .eq("item_id", itemId)
         .maybeSingle(); // Assume only one stack per item_id for a hunter
 
-      if (findError) throw findError;
+      if (findError) {
+          console.error(`[addInventoryItem] Error finding existing stack for ${itemId}:`, findError);
+          throw findError;
+      }
 
       if (existingItem) {
         // Update existing stack
+        console.log(`[addInventoryItem] Found existing stack (instance_id: ${existingItem.instance_id}). Updating quantity...`);
+        const newQuantity = existingItem.quantity + quantityToAdd;
         const { error: updateError } = await supabase
           .from("hunter_inventory_items")
-          .update({ quantity: existingItem.quantity + quantityToAdd })
+          .update({ quantity: newQuantity })
           .eq("instance_id", existingItem.instance_id);
-        if (updateError) inventoryUpdateError = updateError;
+        if (updateError) {
+            console.error(`[addInventoryItem] Error updating stack for instance ${existingItem.instance_id}:`, updateError);
+            inventoryUpdateError = updateError;
+        } else {
+            console.log(`[addInventoryItem] Successfully updated stack for instance ${existingItem.instance_id} to quantity ${newQuantity}.`);
+        }
       } else {
         // Insert new stack if not found
-        const { error: insertError } = await supabase
-          .from("hunter_inventory_items")
-          .insert({
+        console.log(`[addInventoryItem] No existing stack found for ${itemId}. Inserting new stack...`);
+        const insertPayload = {
             hunter_id: hunterId,
             item_id: itemId,
             quantity: quantityToAdd,
             updated_at: new Date().toISOString(),
-          });
-        if (insertError) inventoryUpdateError = insertError;
+          };
+        const { error: insertError } = await supabase
+          .from("hunter_inventory_items")
+          .insert(insertPayload);
+        if (insertError) {
+            console.error(`[addInventoryItem] Error inserting new stack for ${itemId}:`, insertError);
+            inventoryUpdateError = insertError;
+        } else {
+             console.log(`[addInventoryItem] Successfully inserted new stack for ${itemId} with quantity ${quantityToAdd}.`);
+        }
       }
     } else {
       // 2b. Insert new instance for non-stackable item
+      console.log(`[addInventoryItem] Item ${itemId} is not stackable. Inserting ${quantityToAdd} new instance(s)...`);
       const itemsToInsert = Array(quantityToAdd)
         .fill(0)
-        .map(() => ({
+        .map((_, index) => ({
           hunter_id: hunterId,
           item_id: itemId,
           quantity: 1,
@@ -316,19 +335,27 @@ export async function addInventoryItem(
       const { error: insertError } = await supabase
         .from("hunter_inventory_items")
         .insert(itemsToInsert);
-      if (insertError) inventoryUpdateError = insertError;
+      if (insertError) {
+          console.error(`[addInventoryItem] Error inserting non-stackable item(s) ${itemId}:`, insertError);
+          inventoryUpdateError = insertError;
+      } else {
+          console.log(`[addInventoryItem] Successfully inserted ${quantityToAdd} instance(s) of non-stackable item ${itemId}.`);
+      }
     }
 
     if (inventoryUpdateError) {
+      console.error("[addInventoryItem] Inventory update failed.", inventoryUpdateError);
       throw inventoryUpdateError;
     }
 
     // 3. Fetch updated inventory to return
+    console.log(`[addInventoryItem] Fetching updated inventory for hunter ${hunterId}...`);
     const updatedInventory = await getHunterInventory(hunterId, supabase);
+    console.log(`[addInventoryItem] Successfully added item ${itemId} and fetched updated inventory.`);
 
     return { success: true, updatedInventory };
   } catch (error: any) {
-    console.error(`Error adding item ${itemId} for hunter ${hunterId}:`, error);
+    console.error(`[addInventoryItem] CATCH BLOCK: Error adding item ${itemId} for hunter ${hunterId}:`, error);
     // REMOVED Check for unique constraint violation specifically
     // if (error.code === '23505' && error.message?.includes('idx_unique_unequipped_item')) {
     //     return { success: false, error: "Cannot add duplicate unique unequipped item." };
