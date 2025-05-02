@@ -15,6 +15,7 @@ import { InventoryItem } from "@/types/item.types";
 interface InventoryItemCardProps {
   item: InventoryItem;
   onEquip: (inventoryId: string) => void;
+  onUseItem?: (inventoryId: string) => void;
   isEquipDisabled?: boolean;
   isLoading?: boolean;
 }
@@ -22,6 +23,7 @@ interface InventoryItemCardProps {
 export const InventoryItemCard: React.FC<InventoryItemCardProps> = ({
   item,
   onEquip,
+  onUseItem,
   isEquipDisabled = false,
   isLoading = false,
 }) => {
@@ -108,6 +110,7 @@ export const InventoryItemCard: React.FC<InventoryItemCardProps> = ({
             variant="secondary"
             size="sm"
             className="w-full bg-purple-600 text-white hover:bg-purple-700"
+            onClick={() => onUseItem?.(item.inventoryId)}
             disabled={isLoading}
             aria-label={`Use ${item.name}`}
           >

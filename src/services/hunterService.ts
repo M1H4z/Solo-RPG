@@ -12,6 +12,8 @@ import {
 import { getHunterInventory, getHunterEquipment } from "./inventoryService";
 import { EquipmentSlots, InventoryItem } from "@/types/item.types";
 import { HUNTER_BASE_COLUMNS } from "@/constants/dbConstants"; // Import the constant
+// Import stat calculation functions for HP/MP recovery
+import { calculateMaxHP, calculateMaxMP } from "@/lib/game/stats";
 
 /**
  * Processes raw hunter data and combines with inventory/equipment.
@@ -68,10 +70,13 @@ export async function processAndCombineHunterData(
   return {
     ...processedHunter,
     // Use the actual gold/diamonds values fetched from the database
-    gold: dbHunter.gold ?? 0, // Use fetched value, default to 0 if null/undefined
-    diamonds: dbHunter.diamonds ?? 0, // Use fetched value, default to 0 if null/undefined
+    gold: dbHunter.gold ?? 0,
+    diamonds: dbHunter.diamonds ?? 0,
+    // Add current HP/MP mapping from DB result
+    currentHp: dbHunter.current_hp, // Map snake_case from DB to camelCase
+    currentMp: dbHunter.current_mp, // Map snake_case from DB to camelCase
     // Use createdAt as placeholder for updatedAt since it's required by type but not in DB
-    updatedAt: processedHunter.createdAt || new Date().toISOString(), // Fallback to current time if createdAt is missing
+    updatedAt: processedHunter.createdAt || new Date().toISOString(),
     inventory: inventory || [],
     equipment: equipment || {},
     // Ensure skills are arrays, defaulting to empty if DB value is null/not an array
@@ -337,10 +342,11 @@ export async function gainExperience(
   const userId = session.user.id;
 
   try {
-    // 1. Fetch current hunter data needed for calculation
+    // 1. Fetch current hunter data - ADD vitality, intelligence
     const { data: currentHunterData, error: fetchError } = await supabase
       .from("hunters")
-      .select("experience, level, stat_points, skill_points") // Fetch necessary fields
+      // Add vitality and intelligence to select list
+      .select("experience, level, stat_points, skill_points, vitality, intelligence") 
       .eq("id", hunterId)
       .eq("user_id", userId)
       .single();
@@ -355,7 +361,7 @@ export async function gainExperience(
 
     // 2. Calculate new state
     const currentExperience = currentHunterData.experience ?? 0;
-    const currentLevel = currentHunterData.level ?? calculateLevelFromExp(currentExperience); // Use DB level or calculate
+    const currentLevel = currentHunterData.level ?? calculateLevelFromExp(currentExperience);
     const newTotalExperience = currentExperience + amount;
     const newCalculatedLevel = calculateLevelFromExp(newTotalExperience);
 
@@ -365,15 +371,23 @@ export async function gainExperience(
     let skillPointsGained = 0;
     let updatedStatPoints = currentHunterData.stat_points ?? 0;
     let updatedSkillPoints = currentHunterData.skill_points ?? 0;
+    // Variables for HP/MP recovery
+    let newMaxHP = 0;
+    let newMaxMP = 0;
 
     if (newCalculatedLevel > currentLevel) {
         levelUp = true;
         levelsGained = newCalculatedLevel - currentLevel;
-        // Award points for each level gained (e.g., 5 points per level)
-        statPointsGained = levelsGained * 5; // Example: 5 stat points per level
-        skillPointsGained = levelsGained * 5; // Example: 5 skill points per level
+        statPointsGained = levelsGained * 3;
+        skillPointsGained = levelsGained * 1;
         updatedStatPoints += statPointsGained;
         updatedSkillPoints += skillPointsGained;
+
+        // Calculate new Max HP/MP for recovery
+        const vitality = currentHunterData.vitality ?? 0;
+        const intelligence = currentHunterData.intelligence ?? 0;
+        newMaxHP = calculateMaxHP(vitality, newCalculatedLevel);
+        newMaxMP = calculateMaxMP(intelligence, newCalculatedLevel);
     }
 
     // 3. Prepare update payload
@@ -384,6 +398,9 @@ export async function gainExperience(
         updatePayload.level = newCalculatedLevel;
         updatePayload.stat_points = updatedStatPoints;
         updatePayload.skill_points = updatedSkillPoints;
+        // Add HP/MP recovery to payload using snake_case column names
+        updatePayload.current_hp = newMaxHP; // Use snake_case
+        updatePayload.current_mp = newMaxMP; // Use snake_case
     }
 
     // 4. Update hunter in DB
@@ -395,7 +412,7 @@ export async function gainExperience(
 
     if (updateError) {
       console.error("gainExperience - Update Error:", updateError);
-      throw new Error("Database error updating experience/level/points");
+      throw new Error("Database error updating experience/level/points/recovery");
     }
 
     // 5. Fetch the complete updated hunter data

@@ -18,7 +18,7 @@ interface DerivedStats {
   speed?: number;
   evasion?: number;
   precision?: number;
-  basicAttack?: number;
+  attackPower?: number;
   cooldownReduction?: number;
   expNeededForNextLevel?: number;
   currentLevelStartExp?: number;
@@ -36,7 +36,7 @@ interface HunterStatsAllocatorProps {
 
 // Define mapping from primary to derived stats
 const statMappings: Record<AllocatableStat, Array<{ name: string; key: keyof DerivedStats; suffix?: string }>> = {
-  strength: [{ name: "Attack", key: "basicAttack" }],
+  strength: [{ name: "Attack", key: "attackPower" }],
   vitality: [
     { name: "Defense", key: "defense" },
     { name: "HP", key: "maxHP" },

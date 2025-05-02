@@ -12,11 +12,12 @@ import { toast, Toaster } from "sonner";
 import HunterStatsAllocator from "@/components/hunters/HunterStatsAllocator"; // Import stats component
 import SkillsDisplay from "@/components/skills/SkillsDisplay"; // Import skills component
 import { getSkillById } from "@/constants/skills"; // Needed for skill handlers
-import { calculateDerivedStats } from "@/lib/stats"; // Import from lib/stats.ts
+import { calculateDerivedStats } from "@/lib/game/stats"; // Updated Import Path
 import RealTimeClock from "@/components/ui/RealTimeClock"; // Import the clock
 import { CurrencyHistoryChart } from "@/components/game/CurrencyHistoryChart"; // Use named import
 import { Input } from "@/components/ui/Input"; // Import Input for amount
 import { cn } from "@/lib/utils"; // Import cn for conditional classes
+import ExperienceBar from "@/components/ui/ExperienceBar";
 
 const MAX_EQUIPPED = 4; // Define for equip logic
 
@@ -428,19 +429,25 @@ function ProfileContent() {
               
               <Separator />
 
-              {/* HP Group */}
+              {/* HP Group - Refactored to use <progress> */}
               <div>
                 <p>HP: <span className="font-semibold">{derivedStats.currentHP} / {derivedStats.maxHP}</span></p>
-                <div className="relative mt-1 h-2 w-full overflow-hidden rounded-full bg-secondary">
-                  <div className="h-full bg-green-500 transition-all duration-300 ease-out" style={{ width: `${(derivedStats.currentHP / derivedStats.maxHP) * 100}%` }} />
-                </div>
+                <progress
+                  className="[&::-webkit-progress-bar]:bg-background-secondary [&::-webkit-progress-value]:bg-green-500 [&::-moz-progress-bar]:bg-green-500 h-2 w-full [&::-webkit-progress-bar]:rounded-lg [&::-webkit-progress-value]:rounded-lg mt-1"
+                  value={derivedStats.currentHP ?? 0}
+                  max={derivedStats.maxHP ?? 1}
+                  aria-label={`HP: ${derivedStats.currentHP} out of ${derivedStats.maxHP}`}
+                />
               </div>
-              {/* MP Group */}
+              {/* MP Group - Refactored to use <progress> */}
               <div>
                 <p>MP: <span className="font-semibold">{derivedStats.currentMP} / {derivedStats.maxMP}</span></p>
-                <div className="relative mt-1 h-2 w-full overflow-hidden rounded-full bg-secondary">
-                  <div className="h-full bg-blue-500 transition-all duration-300 ease-out" style={{ width: `${(derivedStats.currentMP / derivedStats.maxMP) * 100}%` }} />
-                </div>
+                <progress
+                  className="[&::-webkit-progress-bar]:bg-background-secondary [&::-webkit-progress-value]:bg-blue-500 [&::-moz-progress-bar]:bg-blue-500 h-2 w-full [&::-webkit-progress-bar]:rounded-lg [&::-webkit-progress-value]:rounded-lg mt-1"
+                  value={derivedStats.currentMP ?? 0}
+                  max={derivedStats.maxMP ?? 1}
+                  aria-label={`MP: ${derivedStats.currentMP} out of ${derivedStats.maxMP}`}
+                />
               </div>
               {/* EXP Group */} 
               <div>

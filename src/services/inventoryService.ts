@@ -14,6 +14,8 @@ import {
 import { Hunter } from "@/types/hunter.types"; // Import Hunter type
 import { EQUIPMENT_SLOTS_ORDER } from "@/constants/inventory.constants";
 import { SupabaseClient } from "@supabase/supabase-js";
+// Import stat calculation functions needed for fallback
+import { calculateMaxHP, calculateMaxMP } from '@/lib/game/stats'; 
 
 /**
  * Type guard to check if a string is a valid EquipmentSlotType
@@ -275,6 +277,7 @@ export async function addInventoryItem(
 
     if (baseItem.stackable) {
       // 2a. Try to increment quantity for existing stackable item
+      console.log(`[addInventoryItem] Item ${itemId} is stackable. Checking for existing stack for hunter ${hunterId}...`);
       const { data: existingItem, error: findError } = await supabase
         .from("hunter_inventory_items")
         .select("instance_id, quantity")
@@ -282,32 +285,50 @@ export async function addInventoryItem(
         .eq("item_id", itemId)
         .maybeSingle(); // Assume only one stack per item_id for a hunter
 
-      if (findError) throw findError;
+      if (findError) {
+          console.error(`[addInventoryItem] Error finding existing stack for ${itemId}:`, findError);
+          throw findError;
+      }
 
       if (existingItem) {
         // Update existing stack
+        console.log(`[addInventoryItem] Found existing stack (instance_id: ${existingItem.instance_id}). Updating quantity...`);
+        const newQuantity = existingItem.quantity + quantityToAdd;
         const { error: updateError } = await supabase
           .from("hunter_inventory_items")
-          .update({ quantity: existingItem.quantity + quantityToAdd })
+          .update({ quantity: newQuantity })
           .eq("instance_id", existingItem.instance_id);
-        if (updateError) inventoryUpdateError = updateError;
+        if (updateError) {
+            console.error(`[addInventoryItem] Error updating stack for instance ${existingItem.instance_id}:`, updateError);
+            inventoryUpdateError = updateError;
+        } else {
+            console.log(`[addInventoryItem] Successfully updated stack for instance ${existingItem.instance_id} to quantity ${newQuantity}.`);
+        }
       } else {
         // Insert new stack if not found
-        const { error: insertError } = await supabase
-          .from("hunter_inventory_items")
-          .insert({
+        console.log(`[addInventoryItem] No existing stack found for ${itemId}. Inserting new stack...`);
+        const insertPayload = {
             hunter_id: hunterId,
             item_id: itemId,
             quantity: quantityToAdd,
             updated_at: new Date().toISOString(),
-          });
-        if (insertError) inventoryUpdateError = insertError;
+          };
+        const { error: insertError } = await supabase
+          .from("hunter_inventory_items")
+          .insert(insertPayload);
+        if (insertError) {
+            console.error(`[addInventoryItem] Error inserting new stack for ${itemId}:`, insertError);
+            inventoryUpdateError = insertError;
+        } else {
+             console.log(`[addInventoryItem] Successfully inserted new stack for ${itemId} with quantity ${quantityToAdd}.`);
+        }
       }
     } else {
       // 2b. Insert new instance for non-stackable item
+      console.log(`[addInventoryItem] Item ${itemId} is not stackable. Inserting ${quantityToAdd} new instance(s)...`);
       const itemsToInsert = Array(quantityToAdd)
         .fill(0)
-        .map(() => ({
+        .map((_, index) => ({
           hunter_id: hunterId,
           item_id: itemId,
           quantity: 1,
@@ -316,19 +337,27 @@ export async function addInventoryItem(
       const { error: insertError } = await supabase
         .from("hunter_inventory_items")
         .insert(itemsToInsert);
-      if (insertError) inventoryUpdateError = insertError;
+      if (insertError) {
+          console.error(`[addInventoryItem] Error inserting non-stackable item(s) ${itemId}:`, insertError);
+          inventoryUpdateError = insertError;
+      } else {
+          console.log(`[addInventoryItem] Successfully inserted ${quantityToAdd} instance(s) of non-stackable item ${itemId}.`);
+      }
     }
 
     if (inventoryUpdateError) {
+      console.error("[addInventoryItem] Inventory update failed.", inventoryUpdateError);
       throw inventoryUpdateError;
     }
 
     // 3. Fetch updated inventory to return
+    console.log(`[addInventoryItem] Fetching updated inventory for hunter ${hunterId}...`);
     const updatedInventory = await getHunterInventory(hunterId, supabase);
+    console.log(`[addInventoryItem] Successfully added item ${itemId} and fetched updated inventory.`);
 
     return { success: true, updatedInventory };
   } catch (error: any) {
-    console.error(`Error adding item ${itemId} for hunter ${hunterId}:`, error);
+    console.error(`[addInventoryItem] CATCH BLOCK: Error adding item ${itemId} for hunter ${hunterId}:`, error);
     // REMOVED Check for unique constraint violation specifically
     // if (error.code === '23505' && error.message?.includes('idx_unique_unequipped_item')) {
     //     return { success: false, error: "Cannot add duplicate unique unequipped item." };
@@ -698,5 +727,154 @@ export async function dropInventoryItem(
       error,
     );
     return { success: false, error: error.message || "Failed to drop item." };
+  }
+}
+
+/**
+ * Uses a consumable item instance from the hunter's inventory.
+ * Applies effects (currently HP/MP restoration) and decrements/deletes the item.
+ */
+export async function useConsumableItem(
+  hunterId: string,
+  inventoryInstanceId: string,
+): Promise<{
+  success: boolean;
+  message: string;
+  updatedStats?: { currentHp: number; currentMp: number };
+}> {
+  const session = await getUserSession();
+  if (!session?.user) {
+    return { success: false, message: "Unauthorized: No session" };
+  }
+  const supabase: SupabaseClient<Database> = createSupabaseServerClient();
+
+  // Verify Ownership
+  const isOwner = await verifyHunterOwnership(
+    hunterId,
+    session.user.id,
+    supabase,
+  );
+  if (!isOwner) {
+    return {
+      success: false,
+      message: "Unauthorized: Hunter does not belong to user",
+    };
+  }
+
+  try {
+    // 1. Fetch item instance details including base item type and effects
+    const { data: itemInstance, error: findError } = await supabase
+      .from("hunter_inventory_items")
+      .select(
+        `
+        instance_id,
+        quantity,
+        items (id, name, item_type, effects)
+      `,
+      )
+      .eq("instance_id", inventoryInstanceId)
+      .eq("hunter_id", hunterId)
+      .maybeSingle();
+
+    if (findError) throw new Error(`DB error finding item: ${findError.message}`);
+    if (!itemInstance) {
+      return { success: false, message: "Item instance not found in inventory." };
+    }
+    if (!itemInstance.items) {
+      // Should not happen with the join, but good check
+      return { success: false, message: "Base item data missing." };
+    }
+
+    const baseItem = itemInstance.items;
+    const itemName = baseItem.name || "Item";
+
+    // 2. Validate if usable
+    if (baseItem.item_type !== "Consumable") {
+      return { success: false, message: `${itemName} is not a consumable item.` };
+    }
+    if (!baseItem.effects || typeof baseItem.effects !== 'object' || Object.keys(baseItem.effects).length === 0) {
+      return { success: false, message: `${itemName} has no defined effects.` };
+    }
+
+    // 3. Fetch current hunter stats for applying effects
+    const { data: hunterData, error: hunterError } = await supabase
+      .from("hunters")
+      .select("currentHp, currentMp, maxHp, maxMp") // Use DB column names
+      .eq("id", hunterId)
+      .single();
+
+    if (hunterError) throw new Error(`DB error fetching hunter stats: ${hunterError.message}`);
+    if (!hunterData) return { success: false, message: "Hunter not found." }; // Should be caught by ownership check, but good practice
+
+    // Use calculated max values if DB values are null/missing (fallback)
+    // Ideally, maxHp/maxMp should always be populated in the DB
+    const maxHp = hunterData.maxHp ?? calculateMaxHP(0, 0); // Replace 0s if base calculation needs stats/level
+    const maxMp = hunterData.maxMp ?? calculateMaxMP(0, 0); // Replace 0s if base calculation needs stats/level
+    let currentHp = hunterData.currentHp ?? maxHp;
+    let currentMp = hunterData.currentMp ?? maxMp;
+
+    let hpRestored = 0;
+    let mpRestored = 0;
+
+    // 4. Calculate effects (simple example for flat HP/MP restore)
+    const effects = baseItem.effects as any; // Cast for easier access
+    if (typeof effects.restore_hp_flat === 'number') {
+      const potentialHp = currentHp + effects.restore_hp_flat;
+      const newHp = Math.min(maxHp, potentialHp);
+      hpRestored = newHp - currentHp;
+      currentHp = newHp;
+    }
+     if (typeof effects.restore_mp_flat === 'number') {
+      const potentialMp = currentMp + effects.restore_mp_flat;
+      const newMp = Math.min(maxMp, potentialMp);
+      mpRestored = newMp - currentMp;
+      currentMp = newMp;
+    }
+    // TODO: Add handling for other effect types (percentage restore, status cure, buffs, etc.)
+
+    // 5. Update hunter stats if changed
+    if (hpRestored > 0 || mpRestored > 0) {
+      const { error: updateHunterError } = await supabase
+        .from("hunters")
+        .update({ currentHp: currentHp, currentMp: currentMp })
+        .eq("id", hunterId);
+      if (updateHunterError) throw new Error(`DB error updating hunter stats: ${updateHunterError.message}`);
+    }
+
+    // 6. Decrement/delete item instance
+    const currentQuantity = itemInstance.quantity;
+    if (currentQuantity > 1) {
+      // Reduce quantity
+      const { error: updateItemError } = await supabase
+        .from("hunter_inventory_items")
+        .update({ quantity: currentQuantity - 1 })
+        .eq("instance_id", inventoryInstanceId);
+      if (updateItemError) throw new Error(`DB error updating item quantity: ${updateItemError.message}`);
+    } else {
+      // Delete the item instance
+      const { error: deleteError } = await supabase
+        .from("hunter_inventory_items")
+        .delete()
+        .eq("instance_id", inventoryInstanceId);
+      if (deleteError) throw new Error(`DB error deleting item: ${deleteError.message}`);
+    }
+
+    // 7. Construct success message
+    let message = `Used ${itemName}.`;
+    if (hpRestored > 0) message += ` Restored ${hpRestored} HP.`;
+    if (mpRestored > 0) message += ` Restored ${mpRestored} MP.`;
+
+    return {
+      success: true,
+      message,
+      updatedStats: { currentHp, currentMp },
+    };
+
+  } catch (error: any) {
+    console.error(
+      `Error using item ${inventoryInstanceId} for hunter ${hunterId}:`,
+      error,
+    );
+    return { success: false, message: error.message || "Failed to use item." };
   }
 }

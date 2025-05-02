@@ -14,6 +14,7 @@ export type Database = {
           created_at: string
           current_depth: number
           current_room: number
+          current_room_status: string | null
           expires_at: string
           gate_rank: string
           gate_type: string
@@ -27,6 +28,7 @@ export type Database = {
           created_at?: string
           current_depth?: number
           current_room?: number
+          current_room_status?: string | null
           expires_at: string
           gate_rank: string
           gate_type: string
@@ -40,6 +42,7 @@ export type Database = {
           created_at?: string
           current_depth?: number
           current_room?: number
+          current_room_status?: string | null
           expires_at?: string
           gate_rank?: string
           gate_type?: string
@@ -153,6 +156,8 @@ export type Database = {
           agility: number
           class: string
           created_at: string
+          current_hp: number | null
+          current_mp: number | null
           diamonds: number
           equipped_accessory1: string | null
           equipped_accessory2: string | null
@@ -185,6 +190,8 @@ export type Database = {
           agility?: number
           class: string
           created_at?: string
+          current_hp?: number | null
+          current_mp?: number | null
           diamonds?: number
           equipped_accessory1?: string | null
           equipped_accessory2?: string | null
@@ -217,6 +224,8 @@ export type Database = {
           agility?: number
           class?: string
           created_at?: string
+          current_hp?: number | null
+          current_mp?: number | null
           diamonds?: number
           equipped_accessory1?: string | null
           equipped_accessory2?: string | null

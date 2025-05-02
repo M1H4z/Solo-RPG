@@ -132,7 +132,7 @@ function GateContent({ hunterId }: GateContentProps) {
       return;
     }
     console.log("Entering gate:", gateId);
-    router.push(`/dungeons/${gateId}?hunterId=${hunterId}`);
+    router.push(`/gate/${gateId}?hunterId=${hunterId}`);
   };
 
   const handleAbandonGate = (gateId: string) => {
