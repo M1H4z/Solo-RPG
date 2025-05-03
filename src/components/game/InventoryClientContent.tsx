@@ -410,18 +410,22 @@ function InventoryContent() {
       const result = await response.json();
 
       if (!response.ok || !result.success) {
+        if (response.headers.get("content-type")?.includes("text/html")) {
+          throw new Error(`Server returned an HTML error page (Status: ${response.status})`);
+        } 
         throw new Error(result.message || `Failed to use item (status: ${response.status})`);
       }
 
-      // Success
       toast.success(result.message || 'Item used successfully!');
-      await loadData(); // Refetch data to update inventory quantity and potentially hunter stats
-      // If a details panel is open showing this item, maybe close it or update it?
-      // setSelectedItem(null); // Optionally close details panel after use
+      await loadData();
 
     } catch (err: any) {
       console.error(`Use item error (${inventoryId}):`, err);
-      toast.error(`Failed to use item: ${err.message}`);
+      if (err instanceof SyntaxError) {
+           toast.error(`Failed to use item: Server returned an unexpected response.`);
+      } else {
+          toast.error(`Failed to use item: ${err.message}`);
+      }
     } finally {
       setItemActionLoading(inventoryId, false);
     }
