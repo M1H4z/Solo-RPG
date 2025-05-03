@@ -35,60 +35,69 @@ const MAX_EVASION = 50.0; // Arbitrary cap, adjust as needed
 const MAX_PRECISION = 50.0; // Current cap
 const MAX_COOLDOWN_REDUCTION = 50.0; // Current cap
 
-// --- Derived Stats Calculation Functions ---
+// --- Derived Stats Calculation Functions (updated parameters for clarity) ---
 
-export const calculateMaxHP = (vitality: number, level: number): number => {
+export const calculateMaxHP = (totalVitality: number, level: number, flatHpBonus: number = 0): number => {
   const baseHp = 100;
-  return baseHp + Math.floor(vitality * HP_PER_VIT) + Math.floor(level * HP_PER_LEVEL);
+  // FIX: Incorporate flat HP bonus from equipment
+  return baseHp + Math.floor(totalVitality * HP_PER_VIT) + Math.floor(level * HP_PER_LEVEL) + flatHpBonus;
 };
 
-export const calculateMaxMP = (intelligence: number, level: number): number => {
+export const calculateMaxMP = (totalIntelligence: number, level: number, flatMpBonus: number = 0): number => {
   const baseMp = 50;
-  return baseMp + Math.floor(intelligence * MP_PER_INT) + Math.floor(level * MP_PER_LEVEL);
+  // FIX: Incorporate flat MP bonus from equipment
+  return baseMp + Math.floor(totalIntelligence * MP_PER_INT) + Math.floor(level * MP_PER_LEVEL) + flatMpBonus;
 };
 
-export const calculateDefense = (vitality: number, level: number): number => {
+export const calculateDefense = (totalVitality: number, level: number, flatDefenseBonus: number = 0): number => {
   const baseDef = 5;
-  return baseDef + Math.floor(vitality * DEF_PER_VIT) + Math.floor(level * DEF_PER_LEVEL);
+   // FIX: Incorporate flat Defense bonus from equipment
+  return baseDef + Math.floor(totalVitality * DEF_PER_VIT) + Math.floor(level * DEF_PER_LEVEL) + flatDefenseBonus;
 };
 
-export const calculateAttackPower = (strength: number, level: number): number => {
+export const calculateAttackPower = (totalStrength: number, level: number, flatAttackBonus: number = 0): number => {
   const baseAtk = 10;
-  return baseAtk + Math.floor(strength * ATK_PER_STR) + Math.floor(level * ATK_PER_LEVEL);
+  // FIX: Incorporate flat Attack Power bonus from equipment
+  return baseAtk + Math.floor(totalStrength * ATK_PER_STR) + Math.floor(level * ATK_PER_LEVEL) + flatAttackBonus;
 };
 
-export const calculateCritRate = (agility: number, level: number): number => {
+export const calculateCritRate = (totalAgility: number, level: number, flatCritRateBonus: number = 0): number => {
   const baseCritRate = 5.0; // 5%
-  const rate = baseCritRate + (agility * CRIT_RATE_PER_AGI) + (level * CRIT_RATE_PER_LEVEL);
+  // FIX: Incorporate flat Crit Rate bonus from equipment
+  const rate = baseCritRate + (totalAgility * CRIT_RATE_PER_AGI) + (level * CRIT_RATE_PER_LEVEL) + flatCritRateBonus;
   return parseFloat(Math.min(rate, MAX_CRIT_RATE).toFixed(2));
 };
 
-export const calculateCritDamage = (agility: number): number => {
+export const calculateCritDamage = (totalAgility: number, flatCritDamageBonus: number = 0): number => {
   const baseCritDmg = 1.5; // 150%
-  // No level component added here
-  return parseFloat((baseCritDmg + agility * CRIT_DMG_PER_AGI).toFixed(2));
+  // FIX: Incorporate flat Crit Damage bonus from equipment (additive for now)
+  return parseFloat((baseCritDmg + (totalAgility * CRIT_DMG_PER_AGI) + flatCritDamageBonus).toFixed(2));
 };
 
-export const calculateSpeed = (agility: number, level: number): number => {
+export const calculateSpeed = (totalAgility: number, level: number, flatSpeedBonus: number = 0): number => {
   const baseSpeed = 10;
-  return baseSpeed + Math.floor(agility * SPEED_PER_AGI) + Math.floor(level * SPEED_PER_LEVEL);
+   // FIX: Incorporate flat Speed bonus from equipment
+  return baseSpeed + Math.floor(totalAgility * SPEED_PER_AGI) + Math.floor(level * SPEED_PER_LEVEL) + flatSpeedBonus;
 };
 
-export const calculateEvasion = (agility: number, level: number): number => {
+export const calculateEvasion = (totalAgility: number, level: number, flatEvasionBonus: number = 0): number => {
   const baseEvasion = 2.0; // 2%
-  const evasionValue = baseEvasion + (agility * EVASION_PER_AGI) + (level * EVASION_PER_LEVEL);
+  // FIX: Incorporate flat Evasion bonus from equipment
+  const evasionValue = baseEvasion + (totalAgility * EVASION_PER_AGI) + (level * EVASION_PER_LEVEL) + flatEvasionBonus;
   return parseFloat(Math.min(evasionValue, MAX_EVASION).toFixed(2));
 };
 
-export const calculatePrecision = (perception: number, level: number): number => {
+export const calculatePrecision = (totalPerception: number, level: number, flatPrecisionBonus: number = 0): number => {
   const basePrecision = 0.0; // Starts at 0% min damage boost
-  const precisionValue = basePrecision + (perception * PRECISION_PER_PER) + (level * PRECISION_PER_LEVEL);
+  // FIX: Incorporate flat Precision bonus from equipment
+  const precisionValue = basePrecision + (totalPerception * PRECISION_PER_PER) + (level * PRECISION_PER_LEVEL) + flatPrecisionBonus;
   return parseFloat(Math.min(precisionValue, MAX_PRECISION).toFixed(2));
 };
 
-export const calculateCooldownReduction = (intelligence: number): number => {
-  // No level component added here
-  return Math.min(MAX_COOLDOWN_REDUCTION, Math.floor(intelligence * COOLDOWN_REDUCTION_PER_INT));
+export const calculateCooldownReduction = (totalIntelligence: number, flatCooldownReductionBonus: number = 0): number => {
+  // FIX: Incorporate flat CDR bonus from equipment
+  const cdr = Math.floor(totalIntelligence * COOLDOWN_REDUCTION_PER_INT) + flatCooldownReductionBonus;
+  return Math.min(MAX_COOLDOWN_REDUCTION, cdr);
 };
 
 // --- Updated Interface ---
@@ -127,27 +136,65 @@ export const calculateDerivedStats = (hunter: Hunter | null): Partial<DerivedSta
     currentHp,
     currentMp,
     experience,
-    level: hunterLevel, // Rename to avoid conflict with loop variable 'level'
+    level: hunterLevel,
+    equipment, // Need equipment data
   } = hunter;
 
   // Calculate current level if not provided or invalid
   const currentLevel = (hunterLevel && hunterLevel > 0) ? hunterLevel : calculateLevelFromExp(experience ?? 0);
 
-  // Calculate core derived stats using helper functions, passing level
-  const maxHP = calculateMaxHP(vitality, currentLevel);
-  const maxMP = calculateMaxMP(intelligence, currentLevel);
-  const defense = calculateDefense(vitality, currentLevel);
-  const attackPower = calculateAttackPower(strength, currentLevel);
-  const critRate = calculateCritRate(agility, currentLevel);
-  const critDamage = calculateCritDamage(agility); // Level not needed
-  const speed = calculateSpeed(agility, currentLevel);
-  const evasion = calculateEvasion(agility, currentLevel);
-  const precision = calculatePrecision(perception, currentLevel);
-  const cooldownReduction = calculateCooldownReduction(intelligence); // Level not needed
+  // --- Calculate total stats from equipment ---
+  let eqStr = 0, eqVit = 0, eqAgi = 0, eqInt = 0, eqPer = 0;
+  let eqHP = 0, eqMP = 0, eqAtk = 0, eqDef = 0, eqCritRate = 0;
+  let eqCritDmg = 0, eqSpeed = 0, eqEvasion = 0, eqPrecision = 0, eqCDR = 0;
 
-  // Handle Current HP/MP
-  const finalCurrentHP = currentHp ?? maxHP;
-  const finalCurrentMP = currentMp ?? maxMP;
+  if (equipment) {
+    Object.values(equipment).forEach(item => {
+      if (item && item.stats) {
+        const stats = item.stats as any; // Cast for easier access
+        eqStr += stats.strength || 0;
+        eqVit += stats.vitality || 0;
+        eqAgi += stats.agility || 0;
+        eqInt += stats.intelligence || 0;
+        eqPer += stats.perception || 0;
+        // Add flat bonuses for derived stats if they exist
+        eqHP += stats.maxHp || stats.hp || 0; // Allow maxHp or hp
+        eqMP += stats.maxMp || stats.mp || 0; // Allow maxMp or mp
+        eqAtk += stats.attackPower || stats.atk || 0;
+        eqDef += stats.defense || stats.def || 0;
+        eqCritRate += stats.critRate || 0;
+        eqCritDmg += stats.critDamage || 0;
+        eqSpeed += stats.speed || 0;
+        eqEvasion += stats.evasion || 0;
+        eqPrecision += stats.precision || 0;
+        eqCDR += stats.cooldownReduction || stats.cdr || 0;
+      }
+    });
+  }
+
+  // Calculate total base stats
+  const totalStrength = (strength ?? 0) + eqStr;
+  const totalVitality = (vitality ?? 0) + eqVit;
+  const totalAgility = (agility ?? 0) + eqAgi;
+  const totalIntelligence = (intelligence ?? 0) + eqInt;
+  const totalPerception = (perception ?? 0) + eqPer;
+  // --- End Calculate total stats ---
+
+  // Calculate core derived stats using TOTAL base stats and adding FLAT equipment bonuses
+  const maxHP = calculateMaxHP(totalVitality, currentLevel, eqHP);
+  const maxMP = calculateMaxMP(totalIntelligence, currentLevel, eqMP);
+  const defense = calculateDefense(totalVitality, currentLevel, eqDef);
+  const attackPower = calculateAttackPower(totalStrength, currentLevel, eqAtk);
+  const critRate = calculateCritRate(totalAgility, currentLevel, eqCritRate);
+  const critDamage = calculateCritDamage(totalAgility, eqCritDmg);
+  const speed = calculateSpeed(totalAgility, currentLevel, eqSpeed);
+  const evasion = calculateEvasion(totalAgility, currentLevel, eqEvasion);
+  const precision = calculatePrecision(totalPerception, currentLevel, eqPrecision);
+  const cooldownReduction = calculateCooldownReduction(totalIntelligence, eqCDR);
+
+  // Handle Current HP/MP (ensure it doesn't exceed new max)
+  const finalCurrentHP = Math.min(currentHp ?? maxHP, maxHP);
+  const finalCurrentMP = Math.min(currentMp ?? maxMP, maxMP);
 
   // Calculate Experience Stats using utils
   const expNeededForNextLevel = calculateExpForNextLevelGain(currentLevel);

@@ -299,64 +299,84 @@ export default function CombatInterface({
 
     const handleEnemyTurn = () => {
         if (combatPhase !== 'fighting') {
-            setIsProcessingAction(false); 
-            return;
+            // Already handled exit condition elsewhere or phase changed
+            // setIsProcessingAction(false); // Ensure processing is false if turn ends unexpectedly
+            return; 
         }
         
-        // Use the new damage calculator for enemy attack
+        setIsProcessingAction(true); // Ensure processing stays true for enemy turn
+        setPlayerTurn(false); // Player turn is definitely over
+
         const damageReceived = calculateDamage({
-            attacker: {
+             attacker: {
                 level: enemyData.level,
                 attackPower: enemyData.attackPower,
-                critRate: 5, // Placeholder for enemy crit rate
-                critDamage: 1.5, // Placeholder for enemy crit damage
-                precision: 0, // Placeholder for enemy precision
+                critRate: 5, // Placeholder
+                critDamage: 1.5, // Placeholder
+                precision: 0, // Placeholder
             },
             defender: {
                 defense: hunterData.defense,
             },
             action: {
-                actionPower: 10, // Placeholder power for basic attack
+                actionPower: 10, // Placeholder
             },
         });
-
         addLog(`${enemyData.name} attacks ${hunterData.name} for ${damageReceived} damage!`);
-
         setEnemyAnimation('attack');
-        
-        // Calculate the new HP but DON'T update state yet
-        const newPlayerHp = Math.max(0, combatState.playerHp - damageReceived);
+        const enemyAttackDuration = 4 * 300;
 
-        // Wait for enemy attack animation to finish
-        const enemyAttackDuration = 4 * 300; // totalAttackFrames * ATTACK_FRAME_DURATION_MS
         setTimeout(() => {
-             setEnemyAnimation('idle'); // Reset enemy animation
-
-             // Trigger player hit flash
+             setEnemyAnimation('idle'); 
              setPlayerIsHit(true);
-             setTimeout(() => setPlayerIsHit(false), 150); // Flash duration
+             setTimeout(() => setPlayerIsHit(false), 150);
 
-             // Update player HP state NOW, after animation
-        setCombatState(prev => ({ ...prev, playerHp: newPlayerHp }));
+             let playerDefeated = false; // Flag to check outcome
+             let finalPlayerHp = 0; // Variable to store the result
 
-        if (newPlayerHp === 0) {
-            // --- Defeat --- 
-            addLog(`${hunterData.name} has been defeated!`);
-                setCombatPhase('loss');
-             setTimeout(() => {
-                toast.error("Defeat!");
-                // Pass final HP (0) & MP on loss
-                onCombatResolved('loss', { 
-                    finalPlayerHp: newPlayerHp, 
-                    finalPlayerMp: combatState.playerMp // MP doesn't change on taking damage
-                }); 
-                }, 1000); 
-            return; 
-        }
-            // If not defeated, allow player turn
-        setPlayerTurn(true);
-            setIsProcessingAction(false); // Re-enable player actions
-        }, enemyAttackDuration + 50); // Wait for animation + small buffer (1200 + 50 = 1250ms)
+             // Perform the state update for HP
+             setCombatState(prevState => {
+                 finalPlayerHp = Math.max(0, prevState.playerHp - damageReceived); // Calculate final HP
+                 if (finalPlayerHp === 0) {
+                     console.log("[handleEnemyTurn] Player defeated!");
+                     addLog(`${hunterData.name} has been defeated!`);
+                     playerDefeated = true; // Set flag
+                     return { ...prevState, playerHp: 0 }; // Update state HP to 0
+                 } else {
+                    console.log(`[handleEnemyTurn] Updating HP from ${prevState.playerHp} to ${finalPlayerHp}`);
+                    return { ...prevState, playerHp: finalPlayerHp }; // Update state HP
+                 }
+             });
+
+             // Handle consequences AFTER scheduling state update
+             if (playerDefeated) {
+                 // Use the combatState MP which should be stable from the previous turn
+                 triggerDefeatSequence(combatState.playerMp); // Pass current state MP
+             } else {
+                 // --- FIX: Only enable actions AFTER HP update logic --- 
+                 console.log("[handleEnemyTurn] Enemy turn finished, enabling player actions.");
+                 setPlayerTurn(true);
+                 setIsProcessingAction(false); // Now it's safe to allow player actions
+             }
+
+        }, enemyAttackDuration + 50);
+    };
+
+    // --- Helper function for defeat sequence ---
+    const triggerDefeatSequence = (finalMp: number) => {
+        // Ensure phase is set immediately to help prevent race conditions
+        setCombatPhase('loss');
+        // Ensure actions are disabled
+        setPlayerTurn(false); 
+        setIsProcessingAction(true); 
+        // Wait a bit before calling the callback
+        setTimeout(() => {
+            toast.error("Defeat!");
+            onCombatResolved('loss', { 
+                finalPlayerHp: 0, 
+                finalPlayerMp: finalMp 
+            }); 
+        }, 1000); 
     };
 
     // --- Rewards Popup Handler ---
@@ -398,11 +418,20 @@ export default function CombatInterface({
 
             // Update combat state (HP/MP) if the API provided updated stats
             if (result.updatedStats) {
-                setCombatState(prevState => ({
-                    ...prevState,
-                    playerHp: result.updatedStats.currentHp,
-                    playerMp: result.updatedStats.currentMp,
-                }));
+                console.log('[CombatInterface] Received updatedStats:', result.updatedStats); // Log received data
+                setCombatState(prevState => {
+                    const newState = {
+                        ...prevState,
+                        playerHp: result.updatedStats.currentHp,
+                        playerMp: result.updatedStats.currentMp,
+                    };
+                    // --- ADD LOGGING --- 
+                    console.log('[CombatInterface] Setting new combatState inside setCombatState:', newState);
+                    return newState;
+                });
+                 // --- ADD LOGGING --- 
+                 // Note: State updates might be async, this log might show old state right after setCombatState
+                 // console.log('[CombatInterface] combatState immediately after setCombatState call:', combatState); 
             }
 
             // Item used successfully, now it's enemy's turn

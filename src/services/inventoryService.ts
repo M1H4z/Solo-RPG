@@ -797,48 +797,51 @@ export async function useConsumableItem(
     }
 
     // 3. Fetch current hunter stats for applying effects
-    const { data: hunterData, error: hunterError } = await supabase
-      .from("hunters")
-      .select("currentHp, currentMp, maxHp, maxMp") // Use DB column names
-      .eq("id", hunterId)
-      .single();
-
-    if (hunterError) throw new Error(`DB error fetching hunter stats: ${hunterError.message}`);
-    if (!hunterData) return { success: false, message: "Hunter not found." }; // Should be caught by ownership check, but good practice
-
-    // Use calculated max values if DB values are null/missing (fallback)
-    // Ideally, maxHp/maxMp should always be populated in the DB
-    const maxHp = hunterData.maxHp ?? calculateMaxHP(0, 0); // Replace 0s if base calculation needs stats/level
-    const maxMp = hunterData.maxMp ?? calculateMaxMP(0, 0); // Replace 0s if base calculation needs stats/level
-    let currentHp = hunterData.currentHp ?? maxHp;
-    let currentMp = hunterData.currentMp ?? maxMp;
+    let { initialHp: currentHp, initialMp: currentMp, maxHp, maxMp } = await getHunterStatsForUsage(hunterId, supabase);
 
     let hpRestored = 0;
     let mpRestored = 0;
 
     // 4. Calculate effects (simple example for flat HP/MP restore)
     const effects = baseItem.effects as any; // Cast for easier access
-    if (typeof effects.restore_hp_flat === 'number') {
-      const potentialHp = currentHp + effects.restore_hp_flat;
+    console.log('[useConsumableItem] Initial currentHp:', currentHp, 'MaxHP:', maxHp);
+    console.log('[useConsumableItem] Item Effects:', effects);
+    if (typeof effects.heal === 'number') {
+      console.log('[useConsumableItem] Applying heal effect:', effects.heal);
+      const potentialHp = currentHp + effects.heal;
       const newHp = Math.min(maxHp, potentialHp);
       hpRestored = newHp - currentHp;
       currentHp = newHp;
+      console.log('[useConsumableItem] Calculated hpRestored:', hpRestored, 'New currentHp:', currentHp);
     }
-     if (typeof effects.restore_mp_flat === 'number') {
-      const potentialMp = currentMp + effects.restore_mp_flat;
+    if (typeof effects.restore_mp === 'number') {
+      console.log('[useConsumableItem] Applying mp restore effect:', effects.restore_mp);
+      const potentialMp = currentMp + effects.restore_mp;
       const newMp = Math.min(maxMp, potentialMp);
       mpRestored = newMp - currentMp;
       currentMp = newMp;
+      console.log('[useConsumableItem] Calculated mpRestored:', mpRestored, 'New currentMp:', currentMp);
     }
     // TODO: Add handling for other effect types (percentage restore, status cure, buffs, etc.)
 
     // 5. Update hunter stats if changed
     if (hpRestored > 0 || mpRestored > 0) {
-      const { error: updateHunterError } = await supabase
-        .from("hunters")
-        .update({ currentHp: currentHp, currentMp: currentMp })
-        .eq("id", hunterId);
-      if (updateHunterError) throw new Error(`DB error updating hunter stats: ${updateHunterError.message}`);
+      const updatePayload = {
+        current_hp: currentHp,
+        current_mp: currentMp
+      };
+      console.log('[useConsumableItem] Preparing to update hunter stats:', updatePayload);
+      const { error: updateStatsError } = await supabase
+        .from('hunters')
+        .update(updatePayload)
+        .eq('id', hunterId);
+      
+      if (updateStatsError) {
+        console.error('[useConsumableItem] Hunter stats update FAILED:', updateStatsError);
+        throw new Error(`DB error updating hunter stats: ${updateStatsError.message}`);
+      } else {
+        console.log('[useConsumableItem] Hunter stats update SUCCEEDED.');
+      }
     }
 
     // 6. Decrement/delete item instance
@@ -861,9 +864,11 @@ export async function useConsumableItem(
 
     // 7. Construct success message
     let message = `Used ${itemName}.`;
+    console.log('[useConsumableItem] hpRestored before message construction:', hpRestored);
     if (hpRestored > 0) message += ` Restored ${hpRestored} HP.`;
     if (mpRestored > 0) message += ` Restored ${mpRestored} MP.`;
 
+    console.log('[useConsumableItem] Returning message:', message, 'Updated Stats:', { currentHp, currentMp });
     return {
       success: true,
       message,
@@ -877,4 +882,32 @@ export async function useConsumableItem(
     );
     return { success: false, message: error.message || "Failed to use item." };
   }
+}
+
+// Helper to fetch hunter stats relevant for item usage
+async function getHunterStatsForUsage(hunterId: string, supabase: SupabaseClient<Database>) {
+    const { data: hunterData, error: fetchError } = await supabase
+        .from('hunters')
+        // Fetch base stats needed for max calculation and current values
+        .select('current_hp, current_mp, vitality, intelligence, level, experience') // Added level/exp
+        .eq('id', hunterId)
+        .single();
+
+    if (fetchError) {
+        if (fetchError.code === 'PGRST116') throw new Error('Hunter not found.');
+        console.error("DB error fetching hunter stats for item use:", fetchError);
+        throw new Error('DB error fetching hunter stats');
+    }
+
+    // Calculate max HP/MP based on fetched stats
+    const level = hunterData.level ?? calculateLevelFromExp(hunterData.experience ?? 0);
+    const maxHp = calculateMaxHP(hunterData.vitality ?? 0, level);
+    const maxMp = calculateMaxMP(hunterData.intelligence ?? 0, level);
+
+    // Access fetched data using snake_case
+    let initialHp = hunterData.current_hp ?? maxHp;
+    let initialMp = hunterData.current_mp ?? maxMp;
+
+    // Return mutable values
+    return { initialHp, initialMp, maxHp, maxMp };
 }
