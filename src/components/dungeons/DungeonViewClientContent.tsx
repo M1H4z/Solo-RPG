@@ -40,6 +40,7 @@ interface PlayerCombatEntity {
     expProgressInCurrentLevel: number;
     currentMp: number;
     maxMp: number;
+    equippedSkills: string[];
 }
 
 // Type for the active gate data
@@ -127,6 +128,7 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                 expProgressInCurrentLevel: derivedStats.expProgressInCurrentLevel ?? 0,
                 currentMp: derivedStats.currentMP ?? 0,
                 maxMp: derivedStats.maxMP ?? 1,
+                equippedSkills: Array.isArray(fetchedHunter.equippedSkills) ? fetchedHunter.equippedSkills : [],
             };
             setPlayerCombatStats(combatStats); // Store the stats needed for CombatInterface
 
@@ -300,44 +302,49 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
     }) => {
         console.log(`Combat resolved with result: ${result}, payload:`, payload);
 
-        // --- Save Final HP & MP ---
-        // Combine HP and MP updates into one payload
-        const statsToUpdate: { currentHp?: number; currentMp?: number } = {};
-        if (payload?.finalPlayerHp !== undefined) {
-            statsToUpdate.currentHp = payload.finalPlayerHp;
-        }
-         if (payload?.finalPlayerMp !== undefined) {
-            statsToUpdate.currentMp = payload.finalPlayerMp;
-        }
-
-        if (Object.keys(statsToUpdate).length > 0) {
-            try {
-                toast.info("Saving final stats...");
-                const statsUpdateResponse = await fetch(`/api/hunters/${hunterId}/update-current-stats`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(statsToUpdate) // Send combined payload
-                });
-                const statsUpdateResult = await statsUpdateResponse.json();
-                if (!statsUpdateResponse.ok) {
-                    console.error("Error saving final stats:", statsUpdateResult.error);
-                    toast.error("Failed to save final stats state", { description: statsUpdateResult.error });
-                } else {
-                     console.log("Final stats saved successfully.");
-                }
-            } catch (err: any) {
-                console.error("Unexpected error saving final stats:", err);
-                toast.error("Failed to save final stats state", { description: err.message });
+        // --- Save Final HP & MP (Only if NOT a win) ---
+        // If it's a win, the gain-exp process will handle the final state including level-up recovery.
+        if (result !== 'win') {
+            const statsToUpdate: { currentHp?: number; currentMp?: number } = {};
+            if (payload?.finalPlayerHp !== undefined) {
+                statsToUpdate.currentHp = payload.finalPlayerHp;
             }
-        } else {
-             console.log("No final stats (HP/MP) provided in payload to save.");
+             if (payload?.finalPlayerMp !== undefined) {
+                statsToUpdate.currentMp = payload.finalPlayerMp;
+            }
+
+            if (Object.keys(statsToUpdate).length > 0) {
+                try {
+                    toast.info("Saving final stats...");
+                    const statsUpdateResponse = await fetch(`/api/hunters/${hunterId}/update-current-stats`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(statsToUpdate) // Send combined payload
+                    });
+                    const statsUpdateResult = await statsUpdateResponse.json();
+                    if (!statsUpdateResponse.ok) {
+                        console.error("Error saving final stats:", statsUpdateResult.error);
+                        toast.error("Failed to save final stats state", { description: statsUpdateResult.error });
+                    } else {
+                         console.log("Final stats saved successfully.");
+                    }
+                } catch (err: any) {
+                    console.error("Unexpected error saving final stats:", err);
+                    toast.error("Failed to save final stats state", { description: err.message });
+                }
+            } else {
+                 console.log("No final stats (HP/MP) provided in payload to save.");
+            }
         }
-        // --- End Stats Save ---
+        // --- End Stats Save Conditional Logic ---
 
         // Reset enemy
         setEnemyCombatData(null);
 
         let combatOutcomeProcessed = false;
+        // --- FIX: Declare variable for updated hunter data outside the if block ---
+        let hunterDataFromApi: Hunter | null | undefined = undefined; 
+        // --- END FIX ---
         try {
             // --- Process Combat Outcome --- 
             if (result === 'win') {
@@ -368,7 +375,12 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                         if (!gainExpResponse.ok) throw new Error(gainExpResult.error || "Failed to award EXP");
                         toast.success(`${gainExpResult.message}${gainExpResult.levelUp ? ` | Leveled up to ${gainExpResult.newLevel}!` : ""}`);
                         gainedExpSuccessfully = true;
-                        if (gainExpResult.updatedHunter) setFullHunterData(gainExpResult.updatedHunter as Hunter);
+                        // --- FIX: Store the updated hunter data --- 
+                        if (gainExpResult.updatedHunter) {
+                            hunterDataFromApi = gainExpResult.updatedHunter as Hunter;
+                            setFullHunterData(hunterDataFromApi); // Still update the main state too
+                        }
+                        // --- END FIX ---
                     } else {
                         gainedExpSuccessfully = true; 
                     }
@@ -422,25 +434,35 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                 }
 
                 // Recalculate combat stats based on the potentially updated fullHunterData
-                if (fullHunterData) {
-                    const derivedStats = calculateDerivedStats(fullHunterData);
+                // --- FIX: Use the stored hunter data from the API call --- 
+                const hunterDataForStats = hunterDataFromApi;
+                if (hunterDataForStats) { 
+                    console.log("Recalculating stats based on hunter data returned by gain-exp API:", hunterDataForStats);
+                    const derivedStats = calculateDerivedStats(hunterDataForStats);
+                    // --- END FIX ---
                     setPlayerCombatStats({
-                        id: fullHunterData.id,
-                        name: fullHunterData.name,
-                        currentHp: derivedStats.currentHP ?? 0, // Use recalculated HP (for level up recovery)
+                        id: hunterDataForStats.id,
+                        name: hunterDataForStats.name,
+                        currentHp: derivedStats.currentHP ?? 0, // This should now reflect recovery if level up occurred
                         maxHp: derivedStats.maxHP ?? 1,
-                        level: fullHunterData.level ?? 1,
+                        level: hunterDataForStats.level ?? 1,
                         attackPower: derivedStats.attackPower ?? 0,
                         defense: derivedStats.defense ?? 0,
-                        currentExp: fullHunterData.experience ?? 0,
+                        currentExp: hunterDataForStats.experience ?? 0,
                         expToNextLevel: derivedStats.expNeededForNextLevel ?? 1,
                         critRate: derivedStats.critRate ?? 0,
                         critDamage: derivedStats.critDamage ?? 1.5,
                         precision: derivedStats.precision ?? 0,
                         expProgressInCurrentLevel: derivedStats.expProgressInCurrentLevel ?? 0,
-                        currentMp: derivedStats.currentMP ?? 0,
+                        currentMp: derivedStats.currentMP ?? 0, // This should now reflect recovery
                         maxMp: derivedStats.maxMP ?? 1,
+                        equippedSkills: Array.isArray(hunterDataForStats.equippedSkills) ? hunterDataForStats.equippedSkills : [],
                     });
+                } else if (fullHunterData) {
+                    // Fallback to existing state if API didn't return hunter (shouldn't happen on success)
+                    console.warn("gain-exp API succeeded but didn't return updatedHunter. Using existing state for stats.");
+                    const derivedStats = calculateDerivedStats(fullHunterData);
+                    setPlayerCombatStats(prevStats => ({ ...prevStats, ...derivedStats })); // Merge updates
                 }
                 // Set status to cleared AFTER backend updates and stat refresh attempt
                 setRoomStatus('cleared');
@@ -467,6 +489,7 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
             // For now, let's assume MP recovery should still attempt if stats were saved.
         }
 
+        /* --- FIX: Temporarily Comment Out MP Recovery to Isolate Issue --- 
         // --- Trigger Post-Combat MP Recovery (if stats were saved or outcome processed) ---
         // Only recover if the combat actually ended (win/loss/flee), not just stat save fail
         if (combatOutcomeProcessed) { 
@@ -512,6 +535,7 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                                 expProgressInCurrentLevel: derivedStats.expProgressInCurrentLevel ?? 0,
                                 currentMp: derivedStats.currentMP ?? 0, // Update MP here too
                                 maxMp: derivedStats.maxMP ?? 1,
+                                equippedSkills: Array.isArray(hunterResult.hunter.equippedSkills) ? hunterResult.hunter.equippedSkills : [],
                             });
                         }
                      } catch (err: any) {
@@ -525,6 +549,7 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
             }
         }
         // --- End MP Recovery ---
+        */
 
     };
     // ------------------------

@@ -424,7 +424,7 @@ function InventoryContent() {
       if (err instanceof SyntaxError) {
            toast.error(`Failed to use item: Server returned an unexpected response.`);
       } else {
-          toast.error(`Failed to use item: ${err.message}`);
+      toast.error(`Failed to use item: ${err.message}`);
       }
     } finally {
       setItemActionLoading(inventoryId, false);
