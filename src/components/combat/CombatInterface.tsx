@@ -475,63 +475,72 @@ export default function CombatInterface({
             return;
         }
 
-        // --- Extract Skill Power --- 
-        let skillPower = 0;
-        if (skill.effects) {
-            const effectsArray = Array.isArray(skill.effects) ? skill.effects : [skill.effects];
-            const damageEffect = effectsArray.find(effect => effect.type === 'damage');
-            if (damageEffect && damageEffect.type === 'damage') { // Type guard
-                skillPower = damageEffect.power;
-            }
-        }
-        // TODO: Handle other skill types (healing, buffs) here
-        // --- FIX: Check if effects is array before calling .some() --- 
-        const hasNonDamageEffect = skill.effects && 
-            (Array.isArray(skill.effects) 
-                ? skill.effects.some(e => e.type === 'heal' || e.type === 'buff')
-                : (skill.effects.type === 'heal' || skill.effects.type === 'buff'));
-
-        if (skillPower === 0 && !hasNonDamageEffect) {
-             console.warn(`Skill ${skill.name} (${skill.id}) used, but has no damage/heal/buff effect defined.`);
-             // Optionally prevent use or just proceed with 0 power
-        }
-        // --- END FIX ---
-
         setIsProcessingAction(true);
         setIsSkillMenuOpen(false); // Close menu after selection
         setPlayerAnimation('attack'); // Use 'attack' animation for now, could add 'cast'
 
         // Deduct MP first
         setCombatState(prev => ({ ...prev, playerMp: prev.playerMp - mpCost }));
-        
+
         addLog(`${hunterData.name} uses ${skill.name}!`);
 
         // Delay for animation
         setTimeout(() => {
             setPlayerAnimation('idle');
 
-            // Calculate damage only if it's a damage skill
-            let damageDealt = 0;
-            let wasCrit = false; // Flag to track if crit happened
-            // --- FIX: Check for temporary crit chance bonus --- 
+            // Process effects
+            let skillPower = 0;
             let critChanceBonus = 0;
-            const effectsArrayForCrit = Array.isArray(skill.effects) ? skill.effects : (skill.effects ? [skill.effects] : []);
-            const critEffect = effectsArrayForCrit.find(effect => effect.type === 'crit_chance_on_hit');
-            if (critEffect && critEffect.type === 'crit_chance_on_hit') {
-                critChanceBonus = critEffect.amount;
-                addLog(`${skill.name} gains +${critChanceBonus}% crit chance for this attack!`);
+            let healAmount = 0;
+            // TODO: Add buff/debuff variables here later
+
+            const effectsArray = skill.effects ? (Array.isArray(skill.effects) ? skill.effects : [skill.effects]) : [];
+
+            effectsArray.forEach(effect => {
+                switch (effect.type) {
+                    case 'damage':
+                        skillPower = effect.power;
+                        break;
+                    case 'crit_chance_on_hit':
+                        critChanceBonus = effect.amount;
+                        addLog(`${skill.name} gains +${critChanceBonus}% crit chance for this attack!`);
+                        break;
+                    case 'heal':
+                        healAmount = effect.baseAmount;
+                        break;
+                    // Add cases for buffs/debuffs later
+                    default:
+                         // Optional: Log unhandled effect types
+                         // console.log(`Unhandled effect type: ${effect.type}`);
+                         break;
+                }
+            });
+
+            // Apply Healing Effect
+            if (healAmount > 0) {
+                let healedAmount = 0;
+                setCombatState(prevState => {
+                    const newPlayerHp = Math.min(hunterData.maxHp, prevState.playerHp + healAmount);
+                    healedAmount = newPlayerHp - prevState.playerHp; // Calculate actual amount healed
+                    if (healedAmount > 0) {
+                         addLog(`${skill.name} heals ${hunterData.name} for ${healedAmount} HP!`);
+                    }
+                    return { ...prevState, playerHp: newPlayerHp };
+                });
+                 // Maybe add a visual heal effect later?
+                 // setPlayerHealed(true); setTimeout(() => setPlayerHealed(false), 300);
             }
-            // --- END FIX ---
+
+            // Apply Damage Effect
+            let damageDealt = 0;
+            let wasCrit = false;
 
             if (skillPower > 0) {
-                 // --- Capture full damage result ---
                  const damageResult: DamageResult = calculateDamage({
                      attacker: {
                          level: hunterData.level,
                          attackPower: hunterData.attackPower,
-                         // --- FIX: Apply temporary crit bonus --- 
-                         critRate: Math.min(100, hunterData.critRate + critChanceBonus), // Apply bonus, cap at 100%
-                         // --- END FIX ---
+                         critRate: Math.min(100, hunterData.critRate + critChanceBonus), 
                          critDamage: hunterData.critDamage,
                          precision: hunterData.precision,
                      },
@@ -539,56 +548,61 @@ export default function CombatInterface({
                          defense: enemyData.defense,
                      },
                      action: {
-                         actionPower: skillPower, // Use extracted skill power
+                         actionPower: skillPower,
                      },
                  });
-                 damageDealt = damageResult.damage; // Extract damage
-                 wasCrit = damageResult.isCrit;    // Check for crit
-                 // --- END ---
+                 damageDealt = damageResult.damage;
+                 wasCrit = damageResult.isCrit;
+
                  addLog(`${skill.name} hits ${enemyData.name} for ${damageDealt} damage! ${wasCrit ? '(Critical!)' : ''}`);
-            }
-            
-             // TODO: Implement Heal/Buff application here
-            
-            const newEnemyHp = Math.max(0, combatState.enemyHp - damageDealt);
-            if(damageDealt > 0) {
+
                 setEnemyIsHit(true);
                 setTimeout(() => setEnemyIsHit(false), 150);
             }
-            
-            if (newEnemyHp === 0) {
-                // --- Victory --- 
+
+            // Check enemy defeat
+            const newEnemyHp = Math.max(0, combatState.enemyHp - damageDealt);
+
+            if (newEnemyHp === 0 && damageDealt > 0) { // Ensure defeat is due to this skill's damage
+                // --- Victory ---
                 addLog(`${enemyData.name} has been defeated!`);
                 setEnemyAnimation('defeat');
-                
-                const calculatedExpGained = Math.max(1, Math.floor(enemyData.baseExpYield * enemyData.level / hunterData.level)); 
+
+                const calculatedExpGained = Math.max(1, Math.floor(enemyData.baseExpYield * enemyData.level / hunterData.level));
                 setExpGainedThisFight(calculatedExpGained);
                 addLog(`${hunterData.name} gained ${calculatedExpGained} EXP!`);
-                
+
                 setCombatState(prev => ({ ...prev, enemyHp: 0 }));
 
                 const lootContext = { enemyId: enemyData.id };
                 const lootResult = determineLoot(lootContext);
                 setDeterminedLoot(lootResult);
                 console.log("Determined Loot:", lootResult);
-                
-                setCombatPhase('exp_gaining'); 
+
+                setCombatPhase('exp_gaining');
 
                 setTimeout(() => {
                     setCombatPhase('showing_rewards');
-                    setIsProcessingAction(false); 
-                }, 1500); 
-                return; 
+                    setIsProcessingAction(false);
+                }, 1500);
+                return; // End turn on victory
             } else {
-                 // Enemy survives
-                 if(damageDealt > 0) setEnemyAnimation('hurt');
-                 setCombatState(prev => ({ ...prev, enemyHp: newEnemyHp }));
+                 // Enemy survives or no damage dealt
+                 if (damageDealt > 0) {
+                    setEnemyAnimation('hurt');
+                    setCombatState(prev => ({ ...prev, enemyHp: newEnemyHp }));
+                 } else {
+                     // If no damage was dealt (e.g., pure heal skill), update enemy HP state anyway
+                     // This shouldn't change the value but ensures consistency if state logic expects it
+                     setCombatState(prev => ({ ...prev, enemyHp: newEnemyHp }));
+                 }
+
                  setPlayerTurn(false);
-                 
+
+                 // Delay before enemy turn, allowing hurt animation to play if needed
                  setTimeout(() => {
                     if(damageDealt > 0) setEnemyAnimation('idle');
-                    // Then start enemy turn
-                    setTimeout(handleEnemyTurn, 1000); 
+                    setTimeout(handleEnemyTurn, 1000); // Start enemy turn
                  }, damageDealt > 0 ? 300 : 0); // Only delay if hurt animation played
             }
         }, 1250); // Animation delay
