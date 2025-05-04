@@ -36,12 +36,21 @@ type BuffEffect = {
   duration?: number; // Duration in turns/seconds?
 };
 
+// --- FIX: Add effect type for temporary crit chance on this specific hit ---
+
+type CritChanceOnHitEffect = {
+  type: 'crit_chance_on_hit';
+  amount: number; // The flat percentage points to add to crit chance for this hit
+};
+
+// --- END FIX ---
+
 // TODO: Add DebuffEffect, StatusEffect types here as needed
 // type StatusEffect = { type: 'status', statusType: 'poison' | 'burn' | 'stun', chance: number, duration: number };
 // type DebuffEffect = { type: 'debuff', stat: string, amount: number, duration: number };
 
 // Discriminated union for all possible effects
-export type SkillEffect = DamageEffect | HealEffect | BuffEffect /* | StatusEffect | DebuffEffect | ... other types */;
+export type SkillEffect = DamageEffect | HealEffect | BuffEffect | CritChanceOnHitEffect /* | StatusEffect | DebuffEffect | ... other types */;
 
 // --- END NEW EFFECT TYPE DEFINITIONS ---
 

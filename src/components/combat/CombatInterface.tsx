@@ -9,7 +9,7 @@ import { Swords, ShoppingBag, Sparkles, DoorOpen, Star } from 'lucide-react';
 import VictoryRewardsPopup from './VictoryRewardsPopup';
 import PlayerSprite, { PlayerAnimationState } from './PlayerSprite'; // Import PlayerSprite
 import EnemySprite, { EnemyAnimationState } from './EnemySprite'; // Import EnemySprite
-import { calculateDamage } from '@/lib/combat/damageCalculator'; // <-- Import the calculator
+import { calculateDamage, DamageResult } from '@/lib/combat/damageCalculator'; // <-- Import the calculator and DamageResult type
 import { determineLoot, LootResult } from '@/lib/game/lootService'; // Import loot service
 import { LootDrop } from '@/constants/lootTables.constants'; // Import type
 import { InventoryItem } from '@/types/item.types'; // Import InventoryItem type
@@ -113,10 +113,12 @@ export default function CombatInterface({
     // ---------------------------
 
     const addLog = (message: string) => {
-        if (combatPhase === 'fighting' || combatPhase === 'exp_gaining') { 
-             // Keep only the new message
-             setMessageLog([message]); 
-        }
+        // --- FIX: Append to log, keeping last N messages --- 
+        const MAX_LOG_MESSAGES = 3; // Keep the last 3 messages
+        setMessageLog(prevLog => 
+            [...prevLog, message].slice(-MAX_LOG_MESSAGES)
+        );
+        // --- END FIX ---
     };
 
     // --- Combat Actions ---
@@ -129,7 +131,8 @@ export default function CombatInterface({
             setPlayerAnimation('idle');
 
             // Use the new damage calculator for player attack
-            const damageDealt = calculateDamage({
+            // --- Capture full damage result ---
+            const damageResult: DamageResult = calculateDamage({
                 attacker: {
                     level: hunterData.level,
                     attackPower: hunterData.attackPower,
@@ -145,8 +148,10 @@ export default function CombatInterface({
                     actionPower: 10, // Placeholder power for basic attack
                 },
             });
+            const damageDealt = damageResult.damage; // Extract damage value
+            // --- END ---
 
-            addLog(`${hunterData.name} attacks ${enemyData.name} for ${damageDealt} damage!`);
+            addLog(`${hunterData.name} attacks ${enemyData.name} for ${damageDealt} damage! ${damageResult.isCrit ? '(Critical!)' : ''}`);
             const newEnemyHp = Math.max(0, combatState.enemyHp - damageDealt);
             setEnemyIsHit(true);
             setTimeout(() => setEnemyIsHit(false), 150);
@@ -305,7 +310,8 @@ export default function CombatInterface({
         setIsProcessingAction(true); // Ensure processing stays true for enemy turn
         setPlayerTurn(false); // Player turn is definitely over
 
-        const damageReceived = calculateDamage({
+        // --- Capture full damage result ---
+        const damageResult: DamageResult = calculateDamage({
             attacker: {
                 level: enemyData.level,
                 attackPower: enemyData.attackPower,
@@ -320,7 +326,10 @@ export default function CombatInterface({
                 actionPower: 10, // Placeholder
             },
         });
-        addLog(`${enemyData.name} attacks ${hunterData.name} for ${damageReceived} damage!`);
+        const damageReceived = damageResult.damage; // Extract damage
+        // --- END ---
+
+        addLog(`${enemyData.name} attacks ${hunterData.name} for ${damageReceived} damage! ${damageResult.isCrit ? '(Critical!)' : ''}`);
         setEnemyAnimation('attack');
         const enemyAttackDuration = 4 * 300;
         
@@ -503,12 +512,26 @@ export default function CombatInterface({
 
             // Calculate damage only if it's a damage skill
             let damageDealt = 0;
+            let wasCrit = false; // Flag to track if crit happened
+            // --- FIX: Check for temporary crit chance bonus --- 
+            let critChanceBonus = 0;
+            const effectsArrayForCrit = Array.isArray(skill.effects) ? skill.effects : (skill.effects ? [skill.effects] : []);
+            const critEffect = effectsArrayForCrit.find(effect => effect.type === 'crit_chance_on_hit');
+            if (critEffect && critEffect.type === 'crit_chance_on_hit') {
+                critChanceBonus = critEffect.amount;
+                addLog(`${skill.name} gains +${critChanceBonus}% crit chance for this attack!`);
+            }
+            // --- END FIX ---
+
             if (skillPower > 0) {
-                 damageDealt = calculateDamage({
+                 // --- Capture full damage result ---
+                 const damageResult: DamageResult = calculateDamage({
                      attacker: {
                          level: hunterData.level,
                          attackPower: hunterData.attackPower,
-                         critRate: hunterData.critRate,
+                         // --- FIX: Apply temporary crit bonus --- 
+                         critRate: Math.min(100, hunterData.critRate + critChanceBonus), // Apply bonus, cap at 100%
+                         // --- END FIX ---
                          critDamage: hunterData.critDamage,
                          precision: hunterData.precision,
                      },
@@ -519,7 +542,10 @@ export default function CombatInterface({
                          actionPower: skillPower, // Use extracted skill power
                      },
                  });
-                 addLog(`${skill.name} hits ${enemyData.name} for ${damageDealt} damage!`);
+                 damageDealt = damageResult.damage; // Extract damage
+                 wasCrit = damageResult.isCrit;    // Check for crit
+                 // --- END ---
+                 addLog(`${skill.name} hits ${enemyData.name} for ${damageDealt} damage! ${wasCrit ? '(Critical!)' : ''}`);
             }
             
              // TODO: Implement Heal/Buff application here
