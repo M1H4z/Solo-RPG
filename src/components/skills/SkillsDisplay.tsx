@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Hunter } from "@/types/hunter.types";
-import { Skill, SkillRank } from "@/types/skill.types";
+import { Skill, SkillRank, SkillEffect } from "@/types/skill.types";
 import { ALL_SKILLS, getSkillById, SKILL_RANK_ORDER } from "@/constants/skills";
 import SkillCard from "@/components/skills/SkillCard";
 import {
@@ -38,6 +38,16 @@ export const SkillsDisplay: React.FC<SkillsDisplayProps> = ({
 }) => {
   if (!hunter) return null;
 
+  const formatPassiveEffect = (effect: SkillEffect): string | null => {
+    switch (effect.type) {
+      case 'buff':
+        const formattedStat = effect.stat.charAt(0).toUpperCase() + effect.stat.slice(1);
+        return `+${effect.amount} ${formattedStat}`;
+      default:
+        return null;
+    }
+  };
+
   const unlockedSkillsSet = new Set(hunter.unlockedSkills || []);
   const equippedSkillsSet = new Set(hunter.equippedSkills || []);
   const skillRanks: SkillRank[] = ["E", "D", "C", "B", "A", "S"]; // Keep locally or import
@@ -51,9 +61,18 @@ export const SkillsDisplay: React.FC<SkillsDisplayProps> = ({
     (skill) => skill.type === "passive" && unlockedSkillsSet.has(skill.id),
   );
 
-  const availableSkillsToDisplay = ALL_SKILLS.filter(
-    (skill) => rankFilter === "All" || skill.rank === rankFilter,
-  ).sort((a, b) => {
+  const availableSkillsToDisplay = ALL_SKILLS.filter((skill) => {
+    const rankMatch = rankFilter === "All" || skill.rank === rankFilter;
+    if (!rankMatch) return false;
+
+    const classMatch = 
+      !skill.classRequirement ||
+      skill.classRequirement.length === 0 ||
+      skill.classRequirement.includes(hunter.class as HunterClass);
+    if (!classMatch) return false;
+
+    return true;
+  }).sort((a, b) => {
     const rankOrder =
       SKILL_RANK_ORDER.indexOf(a.rank) - SKILL_RANK_ORDER.indexOf(b.rank);
     if (rankOrder !== 0) return rankOrder;
@@ -117,19 +136,43 @@ export const SkillsDisplay: React.FC<SkillsDisplayProps> = ({
               </p>
             ) : (
               <ul className="space-y-2">
-                {unlockedPassiveSkills.map((skill) => (
-                  <li
-                    key={`passive-${skill.id}`}
-                    className="bg-background-alt border-border-primary rounded border p-2 text-sm"
-                  >
-                    <span className="text-accent-foreground font-semibold">
-                      {skill.name} (Rank {skill.rank}):
-                    </span>
-                    <span className="ml-2 text-text-secondary">
-                      {skill.description}
-                    </span>
-                  </li>
-                ))}
+                {unlockedPassiveSkills.map((skill) => {
+                  // Format effects for display, handling both single object and array
+                  let formattedEffects: (string | null)[] = [];
+                  if (skill.effects) {
+                    if (Array.isArray(skill.effects)) {
+                      formattedEffects = skill.effects.map(formatPassiveEffect);
+                    } else {
+                      // Handle case where effects is a single object
+                      formattedEffects = [formatPassiveEffect(skill.effects)];
+                    }
+                  }
+
+                  const effectsDescription = formattedEffects
+                    .filter((desc): desc is string => desc !== null) // Filter out nulls
+                    .join(', '); // Join multiple effects if any
+
+                  return (
+                    <li
+                      key={`passive-${skill.id}`}
+                      className="bg-background-alt border-border-primary rounded border p-3 text-sm space-y-1"
+                    >
+                      <div>
+                        <span className="text-accent-foreground font-semibold">
+                          {skill.name} (Rank {skill.rank}):
+                        </span>
+                        <span className="ml-2 text-text-secondary">
+                          {skill.description}
+                        </span>
+                      </div>
+                      {effectsDescription && (
+                        <div className="text-xs text-green-400 italic">
+                          Effect: {effectsDescription}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </CardContent>

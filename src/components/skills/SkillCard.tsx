@@ -118,6 +118,27 @@ const SkillCard: React.FC<SkillCardProps> = ({
   const levelRequirementMet = hunter.level >= skill.levelRequirement;
   const rankRequirementMet = hunterRankIndex >= skillRankIndex;
 
+  // --- FIX: Helper function to render effect details ---
+  const renderEffect = (effect: SkillEffect, index: number) => {
+    switch (effect.type) {
+      case 'damage':
+        return <li key={index}>Power: {effect.power}</li>;
+      case 'heal':
+        return <li key={index}>Heal: {effect.baseAmount} HP</li>;
+      case 'buff':
+        return (
+          <li key={index}>
+            Buff: +{effect.amount} {effect.stat}
+            {effect.duration ? ` (${effect.duration} turns)` : ''}
+          </li>
+        );
+      // Add cases for other effect types (debuff, status) here
+      default:
+        return null;
+    }
+  };
+  // --- END FIX ---
+
   return (
     <Card
       className={cn(
@@ -155,8 +176,20 @@ const SkillCard: React.FC<SkillCardProps> = ({
           {skill.cooldown ? `| ${skill.cooldown} CD` : ""}
         </CardDescription>
       </CardHeader>
-      <CardContent className="grow py-2 text-sm">
+      <CardContent className="grow py-2 text-sm space-y-2">
         <p>{skill.description}</p>
+        {/* --- FIX: Render Effect Details --- */}
+        {skill.effects && (
+          <div className="text-xs text-text-secondary pt-1 border-t border-border-dark mt-2">
+            <p className="font-medium mb-0.5">Effect(s):</p>
+            <ul className="list-disc list-inside pl-1 space-y-0.5">
+              {Array.isArray(skill.effects)
+                ? skill.effects.map(renderEffect)
+                : renderEffect(skill.effects, 0)} 
+            </ul>
+          </div>
+        )}
+        {/* --- END FIX --- */}
       </CardContent>
       <CardFooter className="flex items-center justify-between pb-3 pt-2">
         <span

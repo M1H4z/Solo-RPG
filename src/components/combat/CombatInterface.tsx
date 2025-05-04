@@ -13,6 +13,8 @@ import { calculateDamage } from '@/lib/combat/damageCalculator'; // <-- Import t
 import { determineLoot, LootResult } from '@/lib/game/lootService'; // Import loot service
 import { LootDrop } from '@/constants/lootTables.constants'; // Import type
 import { InventoryItem } from '@/types/item.types'; // Import InventoryItem type
+import { Skill, SkillEffect } from "@/types/skill.types"; 
+import { getSkillById } from "@/constants/skills";
 
 // Updated interfaces
 interface EnemyCombatEntity {
@@ -42,6 +44,7 @@ interface PlayerCombatEntity {
     expProgressInCurrentLevel: number;
     currentMp: number;
     maxMp: number;
+    equippedSkills: string[];
 }
 
 interface CombatInterfaceProps {
@@ -105,7 +108,7 @@ export default function CombatInterface({
     
     // --- State for Skill Menu ---
     const [isSkillMenuOpen, setIsSkillMenuOpen] = useState(false);
-    const [usableSkills, setUsableSkills] = useState<CombatSkillInfo[]>([]);
+    const [usableSkills, setUsableSkills] = useState<Skill[]>([]);
     const [isLoadingSkills, setIsLoadingSkills] = useState(false);
     // ---------------------------
 
@@ -208,23 +211,18 @@ export default function CombatInterface({
         setUsableSkills([]);
 
         try {
-            // TODO: Replace with actual fetching of skill details based on hunterData.equippedSkills
-            console.log("Simulating fetch for equipped skills...");
-            // Assuming hunterData has hunterData.equippedSkills = ['skill_basic_slash', 'skill_fireball']
-            await new Promise(resolve => setTimeout(resolve, 300)); // Simulate network delay
+            // --- FIX: Fetch skills based on ACTUAL equipped skills --- 
+            // Ensure hunterData has equippedSkills (type is now updated)
+            const equippedSkillIds = hunterData.equippedSkills || [];
+            console.log("Equipped Skill IDs:", equippedSkillIds);
             
-            // Placeholder data - replace with actual fetched data
-            const fetchedSkills: CombatSkillInfo[] = [
-                { id: 'skill_basic_slash', name: 'Basic Slash', mpCost: 5 },
-                { id: 'skill_fireball', name: 'Fireball', mpCost: 15 },
-                // Add more skills the player might have equipped
-            ]; 
-            
-            // Filter based on actual equipped skills if needed (or assume API does it)
-            // const equippedSkillIds = hunterData.equippedSkills || []; 
-            // const skillsToDisplay = fetchedSkills.filter(s => equippedSkillIds.includes(s.id));
+            const fetchedSkills: Skill[] = equippedSkillIds
+                .map((id: string) => getSkillById(id))
+                .filter((s): s is Skill => s !== undefined); // Filter out undefined results
+            // --- END FIX ---
 
-            setUsableSkills(fetchedSkills); // Using placeholder directly for now
+            console.log("Fetched Skills for Menu:", fetchedSkills);
+            setUsableSkills(fetchedSkills); 
 
         } catch (error: any) {
             console.error("Error fetching usable skills:", error);
@@ -301,14 +299,14 @@ export default function CombatInterface({
         if (combatPhase !== 'fighting') {
             // Already handled exit condition elsewhere or phase changed
             // setIsProcessingAction(false); // Ensure processing is false if turn ends unexpectedly
-            return; 
+            return;
         }
         
         setIsProcessingAction(true); // Ensure processing stays true for enemy turn
         setPlayerTurn(false); // Player turn is definitely over
 
         const damageReceived = calculateDamage({
-             attacker: {
+            attacker: {
                 level: enemyData.level,
                 attackPower: enemyData.attackPower,
                 critRate: 5, // Placeholder
@@ -325,7 +323,7 @@ export default function CombatInterface({
         addLog(`${enemyData.name} attacks ${hunterData.name} for ${damageReceived} damage!`);
         setEnemyAnimation('attack');
         const enemyAttackDuration = 4 * 300;
-
+        
         setTimeout(() => {
              setEnemyAnimation('idle'); 
              setPlayerIsHit(true);
@@ -339,7 +337,7 @@ export default function CombatInterface({
                  finalPlayerHp = Math.max(0, prevState.playerHp - damageReceived); // Calculate final HP
                  if (finalPlayerHp === 0) {
                      console.log("[handleEnemyTurn] Player defeated!");
-                     addLog(`${hunterData.name} has been defeated!`);
+            addLog(`${hunterData.name} has been defeated!`);
                      playerDefeated = true; // Set flag
                      return { ...prevState, playerHp: 0 }; // Update state HP to 0
                  } else {
@@ -365,18 +363,18 @@ export default function CombatInterface({
     // --- Helper function for defeat sequence ---
     const triggerDefeatSequence = (finalMp: number) => {
         // Ensure phase is set immediately to help prevent race conditions
-        setCombatPhase('loss');
+                setCombatPhase('loss');
         // Ensure actions are disabled
         setPlayerTurn(false); 
         setIsProcessingAction(true); 
         // Wait a bit before calling the callback
-        setTimeout(() => {
-            toast.error("Defeat!");
-            onCombatResolved('loss', { 
+             setTimeout(() => {
+                toast.error("Defeat!");
+                onCombatResolved('loss', { 
                 finalPlayerHp: 0, 
                 finalPlayerMp: finalMp 
-            }); 
-        }, 1000); 
+                }); 
+                }, 1000); 
     };
 
     // --- Rewards Popup Handler ---
@@ -421,9 +419,9 @@ export default function CombatInterface({
                 console.log('[CombatInterface] Received updatedStats:', result.updatedStats); // Log received data
                 setCombatState(prevState => {
                     const newState = {
-                        ...prevState,
-                        playerHp: result.updatedStats.currentHp,
-                        playerMp: result.updatedStats.currentMp,
+                    ...prevState,
+                    playerHp: result.updatedStats.currentHp,
+                    playerMp: result.updatedStats.currentMp,
                     };
                     // --- ADD LOGGING --- 
                     console.log('[CombatInterface] Setting new combatState inside setCombatState:', newState);
@@ -453,39 +451,121 @@ export default function CombatInterface({
 
     // --- Placeholder for handleUseSkill --- 
     const handleUseSkill = async (skillId: string) => {
-        const skill = usableSkills.find(s => s.id === skillId);
-        if (!skill || !hunterData?.id) return;
-
-        if (combatState.playerMp < skill.mpCost) {
-            toast.error("Not enough MP!", { id: 'mp-error' });
+        if (!playerTurn || combatPhase !== 'fighting' || isProcessingAction) return;
+        
+        const skill = getSkillById(skillId);
+        if (!skill) {
+            console.error(`Skill with ID ${skillId} not found.`);
+            toast.error("Skill not found");
             return;
         }
 
-        console.log(`Combat: Attempting use for skill ${skill.name} (${skillId})`);
-        toast.info(`Using ${skill.name}... (WIP - No damage/effect yet)`);
-        
+        const mpCost = skill.manaCost || 0;
+        if (combatState.playerMp < mpCost) {
+            toast.warning("Not enough MP!", { description: `You need ${mpCost} MP to use ${skill.name}.`});
+            return;
+        }
+
+        // --- Extract Skill Power --- 
+        let skillPower = 0;
+        if (skill.effects) {
+            const effectsArray = Array.isArray(skill.effects) ? skill.effects : [skill.effects];
+            const damageEffect = effectsArray.find(effect => effect.type === 'damage');
+            if (damageEffect && damageEffect.type === 'damage') { // Type guard
+                skillPower = damageEffect.power;
+            }
+        }
+        // TODO: Handle other skill types (healing, buffs) here
+        // --- FIX: Check if effects is array before calling .some() --- 
+        const hasNonDamageEffect = skill.effects && 
+            (Array.isArray(skill.effects) 
+                ? skill.effects.some(e => e.type === 'heal' || e.type === 'buff')
+                : (skill.effects.type === 'heal' || skill.effects.type === 'buff'));
+
+        if (skillPower === 0 && !hasNonDamageEffect) {
+             console.warn(`Skill ${skill.name} (${skill.id}) used, but has no damage/heal/buff effect defined.`);
+             // Optionally prevent use or just proceed with 0 power
+        }
+        // --- END FIX ---
+
         setIsProcessingAction(true);
-        setIsSkillMenuOpen(false);
+        setIsSkillMenuOpen(false); // Close menu after selection
+        setPlayerAnimation('attack'); // Use 'attack' animation for now, could add 'cast'
 
-        // TODO: Implement skill animation trigger
-        // setPlayerAnimation('skill_cast');
+        // Deduct MP first
+        setCombatState(prev => ({ ...prev, playerMp: prev.playerMp - mpCost }));
+        
+        addLog(`${hunterData.name} uses ${skill.name}!`);
 
-        // TODO: Calculate MP cost
-        const newMp = combatState.playerMp - skill.mpCost;
-        setCombatState(prev => ({ ...prev, playerMp: newMp }));
-        console.log(`MP reduced to ${newMp}`);
+        // Delay for animation
+        setTimeout(() => {
+            setPlayerAnimation('idle');
 
-        // TODO: Calculate damage using skill power
-        // const damageDealt = calculateDamage({ ..., action: { skillPower: skill.power } });
-        // addLog(`${hunterData.name} uses ${skill.name}!`); 
-        // Apply damage, check enemy HP, etc.
+            // Calculate damage only if it's a damage skill
+            let damageDealt = 0;
+            if (skillPower > 0) {
+                 damageDealt = calculateDamage({
+                     attacker: {
+                         level: hunterData.level,
+                         attackPower: hunterData.attackPower,
+                         critRate: hunterData.critRate,
+                         critDamage: hunterData.critDamage,
+                         precision: hunterData.precision,
+                     },
+                     defender: {
+                         defense: enemyData.defense,
+                     },
+                     action: {
+                         actionPower: skillPower, // Use extracted skill power
+                     },
+                 });
+                 addLog(`${skill.name} hits ${enemyData.name} for ${damageDealt} damage!`);
+            }
+            
+             // TODO: Implement Heal/Buff application here
+            
+            const newEnemyHp = Math.max(0, combatState.enemyHp - damageDealt);
+            if(damageDealt > 0) {
+                setEnemyIsHit(true);
+                setTimeout(() => setEnemyIsHit(false), 150);
+            }
+            
+            if (newEnemyHp === 0) {
+                // --- Victory --- 
+                addLog(`${enemyData.name} has been defeated!`);
+                setEnemyAnimation('defeat');
+                
+                const calculatedExpGained = Math.max(1, Math.floor(enemyData.baseExpYield * enemyData.level / hunterData.level)); 
+                setExpGainedThisFight(calculatedExpGained);
+                addLog(`${hunterData.name} gained ${calculatedExpGained} EXP!`);
+                
+                setCombatState(prev => ({ ...prev, enemyHp: 0 }));
 
-        // Simulate action time & trigger enemy turn (for now)
-        await new Promise(resolve => setTimeout(resolve, 1000)); 
+                const lootContext = { enemyId: enemyData.id };
+                const lootResult = determineLoot(lootContext);
+                setDeterminedLoot(lootResult);
+                console.log("Determined Loot:", lootResult);
+                
+                setCombatPhase('exp_gaining'); 
 
-        setPlayerTurn(false);
-        setIsProcessingAction(false);
-        setTimeout(handleEnemyTurn, 500); 
+                setTimeout(() => {
+                    setCombatPhase('showing_rewards');
+                    setIsProcessingAction(false); 
+                }, 1500); 
+                return; 
+            } else {
+                 // Enemy survives
+                 if(damageDealt > 0) setEnemyAnimation('hurt');
+                 setCombatState(prev => ({ ...prev, enemyHp: newEnemyHp }));
+                 setPlayerTurn(false);
+                 
+                 setTimeout(() => {
+                    if(damageDealt > 0) setEnemyAnimation('idle');
+                    // Then start enemy turn
+                    setTimeout(handleEnemyTurn, 1000); 
+                 }, damageDealt > 0 ? 300 : 0); // Only delay if hurt animation played
+            }
+        }, 1250); // Animation delay
     };
     // ----------------------------------------
 
@@ -648,11 +728,11 @@ export default function CombatInterface({
                                     variant="outline" 
                                     className="w-full justify-between text-xs md:text-sm px-2 py-1 md:px-3 md:py-2 whitespace-nowrap overflow-hidden text-ellipsis" // Use justify-between for MP cost
                                     onClick={() => handleUseSkill(skill.id)}
-                                    disabled={isProcessingAction || combatState.playerMp < skill.mpCost} // Also disable if not enough MP
-                                    title={`${skill.name} - Cost: ${skill.mpCost} MP`}
+                                    disabled={isProcessingAction || combatState.playerMp < skill.manaCost} // Also disable if not enough MP
+                                    title={`${skill.name} - Cost: ${skill.manaCost} MP`}
                                 >
                                     <span className="truncate">{skill.name}</span> 
-                                    <span className="ml-2 text-blue-400 shrink-0">{skill.mpCost} MP</span>
+                                    <span className="ml-2 text-blue-400 shrink-0">{skill.manaCost} MP</span>
                                 </Button>
                             ))
                         ) : (
