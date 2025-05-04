@@ -14,6 +14,8 @@ import { EquipmentSlots, InventoryItem } from "@/types/item.types";
 import { HUNTER_BASE_COLUMNS } from "@/constants/dbConstants"; // Import the constant
 // Import stat calculation functions for HP/MP recovery
 import { calculateMaxHP, calculateMaxMP } from "@/lib/game/stats";
+// Import calculateDerivedStats and DerivedStats
+import { calculateDerivedStats, DerivedStats } from "@/lib/game/stats";
 
 /**
  * Processes raw hunter data and combines with inventory/equipment.
@@ -342,11 +344,11 @@ export async function gainExperience(
   const userId = session.user.id;
 
   try {
-    // 1. Fetch current hunter data - ADD vitality, intelligence
-    const { data: currentHunterData, error: fetchError } = await supabase
+    // 1. Fetch current hunter data - including fields needed for calculateDerivedStats
+    const { data: currentHunterDbData, error: fetchError } = await supabase
       .from("hunters")
-      // Add vitality and intelligence to select list
-      .select("experience, level, stat_points, skill_points, vitality, intelligence") 
+      // Select all base columns needed by processAndCombineHunterData/calculateDerivedStats
+      .select(HUNTER_BASE_COLUMNS) 
       .eq("id", hunterId)
       .eq("user_id", userId)
       .single();
@@ -359,9 +361,15 @@ export async function gainExperience(
       throw new Error("Database error fetching hunter data");
     }
 
-    // 2. Calculate new state
-    const currentExperience = currentHunterData.experience ?? 0;
-    const currentLevel = currentHunterData.level ?? calculateLevelFromExp(currentExperience);
+    // 2. Process the fetched DB data to get a full Hunter object
+    const initialHunterObject = await processAndCombineHunterData(currentHunterDbData);
+    if (!initialHunterObject) {
+        throw new Error("Failed to process initial hunter data");
+    }
+
+    // 2. Calculate new state based on the processed initial hunter object
+    const currentExperience = initialHunterObject.experience ?? 0;
+    const currentLevel = initialHunterObject.level; // Use level from processed object
     const newTotalExperience = currentExperience + amount;
     const newCalculatedLevel = calculateLevelFromExp(newTotalExperience);
 
@@ -369,11 +377,10 @@ export async function gainExperience(
     let levelsGained = 0;
     let statPointsGained = 0;
     let skillPointsGained = 0;
-    let updatedStatPoints = currentHunterData.stat_points ?? 0;
-    let updatedSkillPoints = currentHunterData.skill_points ?? 0;
-    // Variables for HP/MP recovery
-    let newMaxHP = 0;
-    let newMaxMP = 0;
+    let updatedStatPoints = initialHunterObject.statPoints ?? 0;
+    let updatedSkillPoints = initialHunterObject.skillPoints ?? 0;
+    // Define variable to hold full derived stats if level up occurs
+    let newDerivedStats: Partial<DerivedStats> = {}; 
 
     if (newCalculatedLevel > currentLevel) {
         levelUp = true;
@@ -383,11 +390,15 @@ export async function gainExperience(
         updatedStatPoints += statPointsGained;
         updatedSkillPoints += skillPointsGained;
 
-        // Calculate new Max HP/MP for recovery
-        const vitality = currentHunterData.vitality ?? 0;
-        const intelligence = currentHunterData.intelligence ?? 0;
-        newMaxHP = calculateMaxHP(vitality, newCalculatedLevel);
-        newMaxMP = calculateMaxMP(intelligence, newCalculatedLevel);
+        // Calculate full derived stats using the NEW level
+        const tempHunterForCalc: Hunter = {
+            ...initialHunterObject,
+            level: newCalculatedLevel,
+            statPoints: updatedStatPoints, // Include updated points if stats calculation needs them
+            skillPoints: updatedSkillPoints,
+        };
+        newDerivedStats = calculateDerivedStats(tempHunterForCalc);
+        console.log(`[gainExperience] Level up! New Derived Stats (incl. Max HP/MP):`, newDerivedStats);
     }
 
     // 3. Prepare update payload
@@ -398,9 +409,9 @@ export async function gainExperience(
         updatePayload.level = newCalculatedLevel;
         updatePayload.stat_points = updatedStatPoints;
         updatePayload.skill_points = updatedSkillPoints;
-        // Add HP/MP recovery to payload using snake_case column names
-        updatePayload.current_hp = newMaxHP; // Use snake_case
-        updatePayload.current_mp = newMaxMP; // Use snake_case
+        // Use derived stats for HP/MP recovery
+        updatePayload.current_hp = typeof newDerivedStats.maxHP === 'number' ? newDerivedStats.maxHP : initialHunterObject.currentHp;
+        updatePayload.current_mp = typeof newDerivedStats.maxMP === 'number' ? newDerivedStats.maxMP : initialHunterObject.currentMp;
     }
 
     // 4. Update hunter in DB
