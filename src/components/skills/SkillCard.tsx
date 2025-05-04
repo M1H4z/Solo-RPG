@@ -132,6 +132,10 @@ const SkillCard: React.FC<SkillCardProps> = ({
             {effect.duration ? ` (${effect.duration} turns)` : ''}
           </li>
         );
+      // --- FIX: Add case for Crit Chance On Hit effect ---
+      case 'crit_chance_on_hit':
+        return <li key={index}>On Use: +{effect.amount}% Crit Chance</li>;
+      // --- END FIX ---
       // Add cases for other effect types (debuff, status) here
       default:
         return null;

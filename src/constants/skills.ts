@@ -15,7 +15,7 @@ const POWER_STRIKE: Skill = {
   classRequirement: undefined,
   levelRequirement: 1,
   skillPointCost: 1,
-  effects: { type: 'damage', power: 10 },
+  effects: { type: 'damage', power: 15 },
   cooldown: 2,
   manaCost: 5,
 };
@@ -168,7 +168,10 @@ const BACKSTAB: Skill = {
     classRequirement: ['Assassin'],
     levelRequirement: 1,
     skillPointCost: 1,
-    effects: { type: 'damage', power: 8 },
+    effects: [
+        { type: 'damage', power: 10 },
+        { type: 'crit_chance_on_hit', amount: 25 }
+    ],
     cooldown: 3,
     manaCost: 6,
 };

@@ -177,8 +177,10 @@ export const calculateDerivedStats = (hunter: Hunter | null): Partial<DerivedSta
 
   // --- Calculate total stats from PASSIVE SKILLS ---
   let passiveStr = 0, passiveVit = 0, passiveAgi = 0, passiveInt = 0, passivePer = 0;
-  // TODO: Consider if passive skills should grant flat derived bonuses too (like equipment)
-  // let passiveHP = 0, passiveMP = 0, passiveAtk = 0, etc...
+  // --- FIX: Initialize variables for flat derived stat bonuses from passives ---
+  let passiveHP = 0, passiveMP = 0, passiveAtk = 0, passiveDef = 0, passiveCritRate = 0;
+  let passiveCritDmg = 0, passiveSpeed = 0, passiveEvasion = 0, passivePrecision = 0, passiveCDR = 0;
+  // --- END FIX ---
 
   if (unlockedSkills && Array.isArray(unlockedSkills)) {
       unlockedSkills.forEach(skillId => {
@@ -194,9 +196,18 @@ export const calculateDerivedStats = (hunter: Hunter | null): Partial<DerivedSta
                           case 'agility': passiveAgi += effect.amount; break;
                           case 'intelligence': passiveInt += effect.amount; break;
                           case 'perception': passivePer += effect.amount; break;
-                          // Add cases here if passive skills directly buff derived stats
-                          // case 'maxHp': passiveHP += effect.amount; break;
-                          // case 'attackPower': passiveAtk += effect.amount; break; 
+                          // --- FIX: Add cases for direct derived stat buffs --- 
+                          case 'maxHp': passiveHP += effect.amount; break;
+                          case 'maxMp': passiveMP += effect.amount; break;
+                          case 'attackPower': passiveAtk += effect.amount; break;
+                          case 'defense': passiveDef += effect.amount; break;
+                          case 'critRate': passiveCritRate += effect.amount; break;
+                          case 'critDamage': passiveCritDmg += effect.amount; break;
+                          case 'speed': passiveSpeed += effect.amount; break;
+                          case 'evasion': passiveEvasion += effect.amount; break;
+                          case 'precision': passivePrecision += effect.amount; break;
+                          case 'cooldownReduction': passiveCDR += effect.amount; break;
+                          // --- END FIX ---
                           default: break;
                       }
                   }
@@ -214,17 +225,30 @@ export const calculateDerivedStats = (hunter: Hunter | null): Partial<DerivedSta
   const totalPerception = (perception ?? 0) + eqPer + passivePer;
   // --- End Calculate total stats ---
 
-  // Calculate core derived stats using TOTAL base stats (including passives) and adding FLAT equipment bonuses
-  const maxHP = calculateMaxHP(totalVitality, currentLevel, eqHP); // Passives affect totalVitality, eqHP is flat bonus
-  const maxMP = calculateMaxMP(totalIntelligence, currentLevel, eqMP); // Passives affect totalIntelligence, eqMP is flat bonus
-  const defense = calculateDefense(totalVitality, currentLevel, eqDef); // Passives affect totalVitality, eqDef is flat bonus
-  const attackPower = calculateAttackPower(totalStrength, currentLevel, eqAtk); // Passives affect totalStrength, eqAtk is flat bonus
-  const critRate = calculateCritRate(totalAgility, currentLevel, eqCritRate); // Passives affect totalAgility, eqCritRate is flat bonus
-  const critDamage = calculateCritDamage(totalAgility, eqCritDmg); // Passives affect totalAgility, eqCritDmg is flat bonus
-  const speed = calculateSpeed(totalAgility, currentLevel, eqSpeed); // Passives affect totalAgility, eqSpeed is flat bonus
-  const evasion = calculateEvasion(totalAgility, currentLevel, eqEvasion); // Passives affect totalAgility, eqEvasion is flat bonus
-  const precision = calculatePrecision(totalPerception, currentLevel, eqPrecision); // Passives affect totalPerception, eqPrecision is flat bonus
-  const cooldownReduction = calculateCooldownReduction(totalIntelligence, eqCDR); // Passives affect totalIntelligence, eqCDR is flat bonus
+  // --- FIX: Combine flat bonuses from equipment AND passives --- 
+  const totalFlatHP = eqHP + passiveHP;
+  const totalFlatMP = eqMP + passiveMP;
+  const totalFlatDef = eqDef + passiveDef;
+  const totalFlatAtk = eqAtk + passiveAtk;
+  const totalFlatCritRate = eqCritRate + passiveCritRate;
+  const totalFlatCritDmg = eqCritDmg + passiveCritDmg;
+  const totalFlatSpeed = eqSpeed + passiveSpeed;
+  const totalFlatEvasion = eqEvasion + passiveEvasion;
+  const totalFlatPrecision = eqPrecision + passivePrecision;
+  const totalFlatCDR = eqCDR + passiveCDR;
+  // --- END FIX ---
+
+  // Calculate core derived stats using TOTAL base stats (including passives) and adding COMBINED FLAT bonuses
+  const maxHP = calculateMaxHP(totalVitality, currentLevel, totalFlatHP);
+  const maxMP = calculateMaxMP(totalIntelligence, currentLevel, totalFlatMP);
+  const defense = calculateDefense(totalVitality, currentLevel, totalFlatDef);
+  const attackPower = calculateAttackPower(totalStrength, currentLevel, totalFlatAtk);
+  const critRate = calculateCritRate(totalAgility, currentLevel, totalFlatCritRate);
+  const critDamage = calculateCritDamage(totalAgility, totalFlatCritDmg);
+  const speed = calculateSpeed(totalAgility, currentLevel, totalFlatSpeed);
+  const evasion = calculateEvasion(totalAgility, currentLevel, totalFlatEvasion);
+  const precision = calculatePrecision(totalPerception, currentLevel, totalFlatPrecision);
+  const cooldownReduction = calculateCooldownReduction(totalIntelligence, totalFlatCDR);
 
   // Handle Current HP/MP (ensure it doesn't exceed new max)
   const finalCurrentHP = Math.min(currentHp ?? maxHP, maxHP);

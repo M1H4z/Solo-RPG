@@ -25,6 +25,13 @@ interface DamageCalculationInput {
   };
 }
 
+// --- Define return type ---
+export interface DamageResult {
+    damage: number;
+    isCrit: boolean;
+}
+// --- End define return type ---
+
 /**
  * Calculate final damage of a single hit
  */
@@ -32,7 +39,7 @@ export function calculateDamage({
   attacker,
   defender,
   action,
-}: DamageCalculationInput): number {
+}: DamageCalculationInput): DamageResult {
   // 1) Level-scaled raw damage × defense mitigation
   const levelFactor = 1 + attacker.level / 10;
   const mitigation =
@@ -58,5 +65,11 @@ export function calculateDamage({
   let dmg = Math.floor(baseDamage * critMul * randomMultiplier);
 
   // 6) Ensure at least 1 final damage
-  return Math.max(1, dmg);
+  dmg = Math.max(1, dmg); // Assign final damage value
+
+  // 7) Return DamageResult object
+  return {
+      damage: dmg,
+      isCrit: isCrit
+  };
 } 
