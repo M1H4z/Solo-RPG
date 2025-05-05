@@ -23,6 +23,10 @@ interface EnemyCombatEntity {
     attackPower: number;
     defense: number;
     baseExpYield: number;
+    precision: number;
+    evasion: number;
+    speed: number;
+    isBoss: boolean;
 }
 interface PlayerCombatEntity {
     id: string;
@@ -41,6 +45,8 @@ interface PlayerCombatEntity {
     currentMp: number;
     maxMp: number;
     equippedSkills: string[];
+    evasion: number;
+    speed: number;
 }
 
 // Type for the active gate data
@@ -129,6 +135,8 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                 currentMp: derivedStats.currentMP ?? 0,
                 maxMp: derivedStats.maxMP ?? 1,
                 equippedSkills: Array.isArray(fetchedHunter.equippedSkills) ? fetchedHunter.equippedSkills : [],
+                evasion: derivedStats.evasion ?? 0,
+                speed: derivedStats.speed ?? 0,
             };
             setPlayerCombatStats(combatStats); // Store the stats needed for CombatInterface
 
@@ -229,17 +237,23 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                 return;
             }
             
-            // TODO: Fetch real enemy data based on gate/depth/room
-            setEnemyCombatData({
+            // --- Create MOCK Enemy Data ---
+            const mockEnemy: EnemyCombatEntity = {
                 id: 'goblin-scout',
                 name: 'Goblin Scout',
-                currentHp: 30, maxHp: 30,
-                level: 3,
-                attackPower: 10,
-                defense: 5,
-                baseExpYield: 25
-            });
-            // ----------------------------------------------
+                level: 3, // Hardcoded Level
+                maxHp: 40, // Hardcoded HP
+                currentHp: 40, // Hardcoded HP
+                attackPower: 8, // Hardcoded Attack
+                defense: 5, // Hardcoded Defense
+                baseExpYield: 15, // Hardcoded EXP Yield
+                precision: 10, // Example: 10% precision
+                evasion: 5,    // Example: 5% evasion
+                speed: 12,     // Example: Speed value
+                isBoss: false,
+            };
+            setEnemyCombatData(mockEnemy);
+            // --- End Mock Data ---
             
             setRoomStatus('combat'); // Set status to combat only AFTER data is ready
         }
@@ -453,6 +467,8 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                         currentMp: derivedStats.currentMP ?? 0,
                         maxMp: derivedStats.maxMP ?? 1,
                         equippedSkills: Array.isArray(hunterDataForStats.equippedSkills) ? hunterDataForStats.equippedSkills : [],
+                        evasion: derivedStats.evasion ?? 0,
+                        speed: derivedStats.speed ?? 0,
                     });
                 } else {
                     console.error("Cannot recalculate combat stats: No hunter data available after combat resolution.");
