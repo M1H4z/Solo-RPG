@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image'; // Re-add Image import to potentially resolve linter issue
 import { Button } from '@/components/ui/Button';
 import { Progress } from '@/components/ui/progress';
@@ -26,6 +26,7 @@ interface EnemyCombatEntity {
     attackPower: number; 
     defense: number;     
     baseExpYield: number; // Added EXP yield
+    isBoss?: boolean; // Add optional isBoss flag
 }
 interface PlayerCombatEntity {
     id: string;
@@ -77,6 +78,30 @@ interface CombatSkillInfo {
     // Add power, effects etc. later when implementing skill logic
 }
 
+// --- Add type for Active Effects ---
+interface ActiveEffect {
+    id: string; // Unique instance ID for this effect application
+    sourceId: string; // ID of the skill/item that applied it
+    stat: string; // Stat being modified
+    amount: number; // Amount of modification
+    duration: number; // Remaining duration in player turns
+}
+// --- END Add type ---
+
+// --- Add Base Combat Stats type for calculation helper ---
+// Defines stats potentially modified by ActiveEffects
+interface ModifiableCombatStats {
+    attackPower?: number;
+    defense?: number;
+    critRate?: number;
+    critDamage?: number;
+    precision?: number;
+    speed?: number;
+    evasion?: number;
+    // Add other potentially modified stats here
+}
+// --- END Add Type ---
+
 export default function CombatInterface({ 
     gateId, 
     hunterData, 
@@ -100,6 +125,15 @@ export default function CombatInterface({
     const [enemyIsHit, setEnemyIsHit] = useState(false);   // Add enemy hit state
     // Add state to hold the determined loot for the popup
     const [determinedLoot, setDeterminedLoot] = useState<LootResult | null>(null);
+    // --- Add State for Active Effects ---
+    const [playerActiveEffects, setPlayerActiveEffects] = useState<ActiveEffect[]>([]);
+    // --- Add State for Effect ID Counter ---
+    const [nextEffectId, setNextEffectId] = useState(0);
+    // --- Add State for Enemy Effects & Counter ---
+    const [enemyActiveEffects, setEnemyActiveEffects] = useState<ActiveEffect[]>([]);
+    const [nextEnemyEffectId, setNextEnemyEffectId] = useState(0);
+    // TODO: Add enemyActiveEffects state if implementing debuffs
+    // --- END Add State ---
 
     // --- State for Item Menu ---
     const [isItemMenuOpen, setIsItemMenuOpen] = useState(false);
@@ -121,11 +155,46 @@ export default function CombatInterface({
         // --- END FIX ---
     };
 
+    // --- Helper function to calculate effective stats for ANY entity ---
+    const calculateEffectiveCombatStats = <T extends ModifiableCombatStats>(
+        baseStats: T, 
+        activeEffects: ActiveEffect[]
+    ): T => {
+        let effectiveStats = { ...baseStats }; // Start with base stats 
+
+        activeEffects.forEach(effect => {
+            const statName = effect.stat as keyof ModifiableCombatStats;
+            // Ensure the stat exists on the effectiveStats object and is a number
+            if (statName in effectiveStats && typeof effectiveStats[statName] === 'number') {
+                (effectiveStats as any)[statName] = (effectiveStats[statName] as number) + effect.amount;
+
+                // Optional: Add clamps or minimums (e.g., defense cannot be negative)
+                 if ((statName === 'defense' || statName === 'attackPower') && effectiveStats[statName]! < 0) {
+                     effectiveStats[statName] = 0;
+                 }
+                 // Example clamp for critRate
+                 // if (statName === 'critRate' && effectiveStats[statName]! > 100) {
+                 //     effectiveStats[statName] = 100;
+                 // }
+            } else {
+                 console.warn(`Attempted to apply effect to unknown or non-numeric stat: ${effect.stat}`);
+            }
+        });
+
+        return effectiveStats;
+    };
+    // --- END Helper function ---
+
     // --- Combat Actions ---
     const handleAttack = () => { 
         if (!playerTurn || combatPhase !== 'fighting' || isProcessingAction) return;
         setIsProcessingAction(true);
         setPlayerAnimation('attack');
+
+        // --- Calculate effective stats using the generic function ---
+        const effectivePlayerStats = calculateEffectiveCombatStats(hunterData, playerActiveEffects);
+        const effectiveEnemyStats = calculateEffectiveCombatStats(enemyData, enemyActiveEffects);
+        // --- END ---
 
         setTimeout(() => {
             setPlayerAnimation('idle');
@@ -134,20 +203,25 @@ export default function CombatInterface({
             // --- Capture full damage result ---
             const damageResult: DamageResult = calculateDamage({
                 attacker: {
-                    level: hunterData.level,
-                    attackPower: hunterData.attackPower,
-                    // Use derived stats from props
-                    critRate: hunterData.critRate,
-                    critDamage: hunterData.critDamage,
-                    precision: hunterData.precision,
+                    level: effectivePlayerStats.level, // level isn't in ModifiableCombatStats, comes from base
+                    attackPower: effectivePlayerStats.attackPower,
+                    critRate: effectivePlayerStats.critRate,
+                    critDamage: effectivePlayerStats.critDamage,
+                    precision: effectivePlayerStats.precision,
                 },
                 defender: {
-                    defense: enemyData.defense,
+                    level: enemyData.level, // Pass defender level
+                    defense: effectiveEnemyStats.defense, // Use effective defense
                 },
                 action: {
                     actionPower: 10, // Placeholder power for basic attack
                 },
+                // No specific context needed for basic attack vs mob (unless mob is boss)
+                context: { isBoss: enemyData.isBoss }
             });
+            // --- Log Debug Info ---
+            console.log("Player Basic Attack Debug:", damageResult.debug);
+            // --- END Log ---
             const damageDealt = damageResult.damage; // Extract damage value
             // --- END ---
 
@@ -192,7 +266,8 @@ export default function CombatInterface({
                  // Reset enemy animation back to idle after hurt duration
                  setTimeout(() => {
                     setEnemyAnimation('idle');
-                    // Then start enemy turn
+                    // --- Decrement Player Buff Durations & Start Enemy Turn ---
+                    decrementPlayerBuffDurations(); // Decrement buffs AFTER player action resolves
                     setTimeout(handleEnemyTurn, 1000); // Start enemy turn after hurt+delay
                  }, 300); // Match HURT_DURATION_MS in EnemySprite
             }
@@ -310,22 +385,33 @@ export default function CombatInterface({
         setIsProcessingAction(true); // Ensure processing stays true for enemy turn
         setPlayerTurn(false); // Player turn is definitely over
 
+        // --- Calculate effective stats using the generic function ---
+        const effectivePlayerStats = calculateEffectiveCombatStats(hunterData, playerActiveEffects);
+        const effectiveEnemyStats = calculateEffectiveCombatStats(enemyData, enemyActiveEffects);
+        // --- END ---
+
         // --- Capture full damage result ---
         const damageResult: DamageResult = calculateDamage({
             attacker: {
                 level: enemyData.level,
-                attackPower: enemyData.attackPower,
-                critRate: 5, // Placeholder
-                critDamage: 1.5, // Placeholder
-                precision: 0, // Placeholder
+                attackPower: effectiveEnemyStats.attackPower, // Use effective attack
+                critRate: 5, // Placeholder - Enemy base crit rate
+                critDamage: 1.5, // Placeholder - Enemy base crit damage
+                precision: 0, // Placeholder - Enemy base precision
             },
             defender: {
-                defense: hunterData.defense,
+                level: effectivePlayerStats.level, // Pass player level
+                defense: effectivePlayerStats.defense, // Use effective defense
             },
             action: {
                 actionPower: 10, // Placeholder
             },
+            // No specific context needed for basic mob attack vs player
+            // context: {}
         });
+        // --- Log Debug Info ---
+        console.log("Enemy Basic Attack Debug:", damageResult.debug);
+        // --- END Log ---
         const damageReceived = damageResult.damage; // Extract damage
         // --- END ---
 
@@ -364,6 +450,9 @@ export default function CombatInterface({
                  console.log("[handleEnemyTurn] Enemy turn finished, enabling player actions.");
                  setPlayerTurn(true);
                  setIsProcessingAction(false); // Now it's safe to allow player actions
+                 // --- Decrement Enemy Debuff Durations (if implemented) ---
+                 decrementEnemyDebuffDurations(); // Call this here at end of enemy turn
+                 // --- END ---
              }
 
         }, enemyAttackDuration + 50);
@@ -474,10 +563,15 @@ export default function CombatInterface({
             toast.warning("Not enough MP!", { description: `You need ${mpCost} MP to use ${skill.name}.`});
             return;
         }
-
+        
         setIsProcessingAction(true);
         setIsSkillMenuOpen(false); // Close menu after selection
-        setPlayerAnimation('attack'); // Use 'attack' animation for now, could add 'cast'
+        setPlayerAnimation('attack'); // Use attack animation for skills for now
+
+        // --- Calculate effective stats using the generic function ---
+        const effectivePlayerStats = calculateEffectiveCombatStats(hunterData, playerActiveEffects);
+        const effectiveEnemyStats = calculateEffectiveCombatStats(enemyData, enemyActiveEffects); // Define it here
+        // --- END ---
 
         // Deduct MP first
         setCombatState(prev => ({ ...prev, playerMp: prev.playerMp - mpCost }));
@@ -486,131 +580,188 @@ export default function CombatInterface({
 
         // Delay for animation
         setTimeout(() => {
-            setPlayerAnimation('idle');
+            setPlayerAnimation('idle'); // Reset animation
+            let enemyDefeated = false;
 
-            // Process effects
-            let skillPower = 0;
-            let critChanceBonus = 0;
-            let healAmount = 0;
-            // TODO: Add buff/debuff variables here later
+            const effects = Array.isArray(skill.effects) ? skill.effects : [skill.effects];
 
-            const effectsArray = skill.effects ? (Array.isArray(skill.effects) ? skill.effects : [skill.effects]) : [];
+            effects.forEach(effect => {
+                if (enemyDefeated) return; // Don't process further effects if enemy is already down
 
-            effectsArray.forEach(effect => {
                 switch (effect.type) {
                     case 'damage':
-                        skillPower = effect.power;
-                        break;
-                    case 'crit_chance_on_hit':
-                        critChanceBonus = effect.amount;
-                        addLog(`${skill.name} gains +${critChanceBonus}% crit chance for this attack!`);
+                        const damageResult = calculateDamage({
+                             attacker: {
+                                // Use effective player stats
+                                level: effectivePlayerStats.level,
+                                attackPower: effectivePlayerStats.attackPower,
+                                critRate: effectivePlayerStats.critRate,
+                                critDamage: effectivePlayerStats.critDamage,
+                                precision: effectivePlayerStats.precision,
+                            },
+                            defender: {
+                                defense: effectiveEnemyStats.defense, // Use effective enemy defense
+                            },
+                            action: {
+                                actionPower: effect.power || 10, // Use skill power or default
+                                // Apply Crit Chance On Hit using effective base crit rate
+                                temporaryCritChanceBonus: effects.find(e => e.type === 'crit_chance_on_hit')?.amount || 0
+                            },
+                            // Pass context if needed (e.g., check if target is boss)
+                            context: { isBoss: enemyData.isBoss } 
+                        });
+                        // --- Log Debug Info ---
+                        console.log(`Player Skill (${skill.name}) Debug:`, damageResult.debug);
+                        // --- END Log ---
+
+                        let damageDealt = damageResult.damage;
+                        let wasCrit = damageResult.isCrit;
+
+                        addLog(`${skill.name} hits ${enemyData.name} for ${damageDealt} damage! ${wasCrit ? '(Critical!)' : ''}`);
+
+                        setEnemyIsHit(true);
+                        setTimeout(() => setEnemyIsHit(false), 150);
+
+                        // Check enemy defeat
+                        const newEnemyHp = Math.max(0, combatState.enemyHp - damageDealt);
+
+                        if (newEnemyHp === 0 && damageDealt > 0) { // Ensure defeat is due to this skill's damage
+                            // --- Victory ---
+                            addLog(`${enemyData.name} has been defeated!`);
+                            setEnemyAnimation('defeat');
+
+                            const calculatedExpGained = Math.max(1, Math.floor(enemyData.baseExpYield * enemyData.level / hunterData.level));
+                            setExpGainedThisFight(calculatedExpGained);
+                            addLog(`${hunterData.name} gained ${calculatedExpGained} EXP!`);
+
+                            setCombatState(prev => ({ ...prev, enemyHp: 0 }));
+
+                            const lootContext = { enemyId: enemyData.id };
+                            const lootResult = determineLoot(lootContext);
+                            setDeterminedLoot(lootResult);
+                            console.log("Determined Loot:", lootResult);
+
+                            setCombatPhase('exp_gaining');
+
+                            setTimeout(() => {
+                                setCombatPhase('showing_rewards');
+                                setIsProcessingAction(false);
+                            }, 1500);
+                            enemyDefeated = true;
+                            return; // End turn on victory
+                        } else {
+                             // Enemy survives or no damage dealt
+                             if (damageDealt > 0) {
+                                setEnemyAnimation('hurt');
+                                setCombatState(prev => ({ ...prev, enemyHp: newEnemyHp }));
+                             } else {
+                                 // If no damage was dealt (e.g., pure heal skill), update enemy HP state anyway
+                                 // This shouldn't change the value but ensures consistency if state logic expects it
+                                 setCombatState(prev => ({ ...prev, enemyHp: newEnemyHp }));
+                             }
+
+                    setPlayerTurn(false);
+
+                             // Delay before enemy turn, allowing hurt animation to play if needed
+                             setTimeout(() => {
+                                if(damageDealt > 0) setEnemyAnimation('idle');
+                                setTimeout(handleEnemyTurn, 1000); // Start enemy turn
+                             }, damageDealt > 0 ? 300 : 0); // Only delay if hurt animation played
+                        }
                         break;
                     case 'heal':
-                        healAmount = effect.baseAmount;
+                        let healAmount = effect.baseAmount;
+                        let healedAmount = 0;
+                        setCombatState(prevState => {
+                            const newPlayerHp = Math.min(hunterData.maxHp, prevState.playerHp + healAmount);
+                            healedAmount = newPlayerHp - prevState.playerHp; // Calculate actual amount healed
+                            if (healedAmount > 0) {
+                                 addLog(`${skill.name} heals ${hunterData.name} for ${healedAmount} HP!`);
+                            }
+                            return { ...prevState, playerHp: newPlayerHp };
+                        });
+                         // Maybe add a visual heal effect later?
+                         // setPlayerHealed(true); setTimeout(() => setPlayerHealed(false), 300);
                         break;
-                    // Add cases for buffs/debuffs later
+                    case 'buff':
+                         if (effect.duration && effect.duration > 0) {
+                             // --- Apply Buff ---
+                             const newEffect: ActiveEffect = {
+                                 id: `skill-effect-${nextEffectId}`, // Use counter for unique ID
+                                 sourceId: skill.id,
+                                 stat: effect.stat,
+                                 amount: effect.amount,
+                                 duration: effect.duration,
+                             };
+                             setPlayerActiveEffects(prev => [...prev, newEffect]);
+                             setNextEffectId(prevId => prevId + 1); // Increment counter
+                             addLog(`${hunterData.name} gained buff: +${effect.amount} ${effect.stat} for ${effect.duration} turns.`);
+                             // --- END Apply Buff ---
+                        } else {
+                             addLog(`${skill.name} buff has no duration, effect not applied persistently.`);
+                        }
+                        break;
+                    case 'debuff': // Apply Debuff to Enemy
+                        if (effect.duration && effect.duration > 0) {
+                            const newEffect: ActiveEffect = {
+                                id: `enemy-effect-${nextEnemyEffectId}`, // Use separate counter
+                                sourceId: skill.id,
+                                stat: effect.stat,
+                                amount: effect.amount, // Should be negative
+                                duration: effect.duration,
+                            };
+                            setEnemyActiveEffects(prev => [...prev, newEffect]);
+                            setNextEnemyEffectId(prevId => prevId + 1); // Increment enemy counter
+                            addLog(`${enemyData.name} afflicted with debuff: ${effect.amount} ${effect.stat} for ${effect.duration} turns.`);
+                        } else {
+                             addLog(`${skill.name} debuff has no duration, effect not applied persistently.`);
+                        }
+                        break;
+                    case 'crit_chance_on_hit':
+                        // This effect is handled directly within the 'damage' case by calculateDamage
+                        // No separate action needed here, but log it for clarity if desired.
+                         // addLog(`${skill.name} increases Crit Chance for this hit by ${effect.amount}%.`);
+                        break;
                     default:
-                         // Optional: Log unhandled effect types
-                         // console.log(`Unhandled effect type: ${effect.type}`);
-                         break;
+                        // Handle unknown effect types if necessary
+                        break;
                 }
             });
 
-            // Apply Healing Effect
-            if (healAmount > 0) {
-                let healedAmount = 0;
-                setCombatState(prevState => {
-                    const newPlayerHp = Math.min(hunterData.maxHp, prevState.playerHp + healAmount);
-                    healedAmount = newPlayerHp - prevState.playerHp; // Calculate actual amount healed
-                    if (healedAmount > 0) {
-                         addLog(`${skill.name} heals ${hunterData.name} for ${healedAmount} HP!`);
-                    }
-                    return { ...prevState, playerHp: newPlayerHp };
-                });
-                 // Maybe add a visual heal effect later?
-                 // setPlayerHealed(true); setTimeout(() => setPlayerHealed(false), 300);
-            }
-
-            // Apply Damage Effect
-            let damageDealt = 0;
-            let wasCrit = false;
-
-            if (skillPower > 0) {
-                 const damageResult: DamageResult = calculateDamage({
-                     attacker: {
-                         level: hunterData.level,
-                         attackPower: hunterData.attackPower,
-                         critRate: Math.min(100, hunterData.critRate + critChanceBonus), 
-                         critDamage: hunterData.critDamage,
-                         precision: hunterData.precision,
-                     },
-                     defender: {
-                         defense: enemyData.defense,
-                     },
-                     action: {
-                         actionPower: skillPower,
-                     },
-                 });
-                 damageDealt = damageResult.damage;
-                 wasCrit = damageResult.isCrit;
-
-                 addLog(`${skill.name} hits ${enemyData.name} for ${damageDealt} damage! ${wasCrit ? '(Critical!)' : ''}`);
-
-                setEnemyIsHit(true);
-                setTimeout(() => setEnemyIsHit(false), 150);
-            }
-
-            // Check enemy defeat
-            const newEnemyHp = Math.max(0, combatState.enemyHp - damageDealt);
-
-            if (newEnemyHp === 0 && damageDealt > 0) { // Ensure defeat is due to this skill's damage
-                // --- Victory ---
-                addLog(`${enemyData.name} has been defeated!`);
-                setEnemyAnimation('defeat');
-
-                const calculatedExpGained = Math.max(1, Math.floor(enemyData.baseExpYield * enemyData.level / hunterData.level));
-                setExpGainedThisFight(calculatedExpGained);
-                addLog(`${hunterData.name} gained ${calculatedExpGained} EXP!`);
-
-                setCombatState(prev => ({ ...prev, enemyHp: 0 }));
-
-                const lootContext = { enemyId: enemyData.id };
-                const lootResult = determineLoot(lootContext);
-                setDeterminedLoot(lootResult);
-                console.log("Determined Loot:", lootResult);
-
-                setCombatPhase('exp_gaining');
-
-                setTimeout(() => {
-                    setCombatPhase('showing_rewards');
-                    setIsProcessingAction(false);
-                }, 1500);
-                return; // End turn on victory
-            } else {
-                 // Enemy survives or no damage dealt
-                 if (damageDealt > 0) {
-                    setEnemyAnimation('hurt');
-                    setCombatState(prev => ({ ...prev, enemyHp: newEnemyHp }));
-                 } else {
-                     // If no damage was dealt (e.g., pure heal skill), update enemy HP state anyway
-                     // This shouldn't change the value but ensures consistency if state logic expects it
-                     setCombatState(prev => ({ ...prev, enemyHp: newEnemyHp }));
-                 }
-
+            // If enemy not defeated by skill effects, end turn
+            if (!enemyDefeated) {
                  setPlayerTurn(false);
+                 // --- Decrement Player Buff Durations & Start Enemy Turn ---
+                 decrementPlayerBuffDurations();
+                 setTimeout(handleEnemyTurn, 1000);
+             }
 
-                 // Delay before enemy turn, allowing hurt animation to play if needed
-                 setTimeout(() => {
-                    if(damageDealt > 0) setEnemyAnimation('idle');
-                    setTimeout(handleEnemyTurn, 1000); // Start enemy turn
-                 }, damageDealt > 0 ? 300 : 0); // Only delay if hurt animation played
-            }
-        }, 1250); // Animation delay
+        }, 1250); // Animation delay - Adjusted back from 300 to original 1250
     };
     // ----------------------------------------
 
     // Determine if main action buttons should be disabled
     const buttonsDisabled = !playerTurn || combatPhase !== 'fighting' || isProcessingAction || isItemMenuOpen || isSkillMenuOpen; // Add skill menu check
+
+    // --- FIX: Add function to decrement player buff durations ---
+    const decrementPlayerBuffDurations = () => {
+        setPlayerActiveEffects(prevEffects => 
+            prevEffects
+                .map(effect => ({ ...effect, duration: effect.duration - 1 })) // Decrement duration
+                .filter(effect => effect.duration > 0) // Remove expired effects
+        );
+    };
+    // --- END FIX ---
+
+    // --- Add function to decrement ENEMY debuff durations ---
+    const decrementEnemyDebuffDurations = () => {
+        setEnemyActiveEffects(prevEffects => 
+            prevEffects
+                .map(effect => ({ ...effect, duration: effect.duration - 1 })) // Decrement duration
+                .filter(effect => effect.duration > 0) // Remove expired effects
+        );
+    };
+    // --- END FIX ---
 
     return (
         // Main container
@@ -663,7 +814,7 @@ export default function CombatInterface({
                  {/* MP Bar & Text */}
                  <Progress 
                     value={(combatState.playerMp / hunterData.maxMp) * 100}
-                    className="h-2 w-full bg-neutral-700 border border-border mb-0.5"
+                    className="h-2 w-full bg-neutral-700 border border-border mb-0.5 [&>div]:bg-blue-500"
                     aria-label={`${hunterData.name} MP`} 
                  />
                  <div className="text-[10px] md:text-xs text-text-secondary mt-0 text-right">
@@ -674,7 +825,7 @@ export default function CombatInterface({
             {/* Separate Container for EXP Bar - Positioned directly below the main info box */}
             <div className="absolute bottom-[74px] left-2 w-48 md:bottom-[58px] md:left-4 md:w-64 z-20 px-1 md:px-2"> 
                  <Progress 
-                    value={(hunterData.expProgressInCurrentLevel / hunterData.expToNextLevel) * 100}
+                    value={hunterData.expToNextLevel > 0 ? (hunterData.expProgressInCurrentLevel / hunterData.expToNextLevel) * 100 : 0} // Handle division by zero
                     // Remove top border by specifying only bottom, left, right borders
                     className="h-1.5 w-full bg-neutral-700 border-b border-l border-r border-border [&>div]:bg-sky-400" 
                     aria-label={`${hunterData.name} EXP`} 
@@ -721,7 +872,7 @@ export default function CombatInterface({
 
             {/* Item Selection Menu */}
             {isItemMenuOpen && (
-                <div className="absolute bottom-2 left-2 right-2 flex flex-col justify-end gap-2 md:bottom-4 md:left-auto md:right-4 md:w-48 md:justify-start pointer-events-auto">
+                <div className="absolute bottom-2 left-2 right-2 flex flex-col justify-end gap-2 md:bottom-4 md:left-auto md:right-4 md:w-48 md:justify-start pointer-events-auto z-30">
                     {/* Scrollable container - remove pr-1 */}
                     <div className="flex flex-col-reverse md:flex-col gap-2 overflow-y-auto max-h-40"> 
                         {isLoadingItems ? (
@@ -756,8 +907,8 @@ export default function CombatInterface({
 
              {/* Skill Selection Menu */}
             {isSkillMenuOpen && (
-                <div className="absolute bottom-2 left-2 right-2 flex flex-col justify-end gap-2 md:bottom-4 md:left-auto md:right-4 md:w-48 md:justify-start pointer-events-auto">
-                    {/* Scrollable container for skill buttons */}
+                <div className="absolute bottom-2 left-2 right-2 flex flex-col justify-end gap-2 md:bottom-4 md:left-auto md:right-4 md:w-48 md:justify-start pointer-events-auto z-30">
+                    {/* Scrollable container for skill buttons */}                   
                     <div className="flex flex-col-reverse md:flex-col gap-2 overflow-y-auto max-h-40"> 
                         {isLoadingSkills ? (
                             <p className="text-xs text-center text-text-secondary italic p-2">Loading skills...</p>
@@ -768,7 +919,7 @@ export default function CombatInterface({
                                     variant="outline" 
                                     className="w-full justify-between text-xs md:text-sm px-2 py-1 md:px-3 md:py-2 whitespace-nowrap overflow-hidden text-ellipsis" // Use justify-between for MP cost
                                     onClick={() => handleUseSkill(skill.id)}
-                                    disabled={isProcessingAction || combatState.playerMp < skill.manaCost} // Also disable if not enough MP
+                                    disabled={isProcessingAction || combatState.playerMp < (skill.manaCost ?? 0)} // Also disable if not enough MP
                                     title={`${skill.name} - Cost: ${skill.manaCost} MP`}
                                 >
                                     <span className="truncate">{skill.name}</span> 
@@ -800,8 +951,7 @@ export default function CombatInterface({
                     itemsDropped={determinedLoot.droppedItems}
                     onContinue={handleVictoryContinue}
                 />
-            )}
-             
+            )}     
         </div>
     );
 }

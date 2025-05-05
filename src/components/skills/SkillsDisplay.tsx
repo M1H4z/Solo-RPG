@@ -153,24 +153,24 @@ export const SkillsDisplay: React.FC<SkillsDisplayProps> = ({
                     .join(', '); // Join multiple effects if any
 
                   return (
-                    <li
-                      key={`passive-${skill.id}`}
+                  <li
+                    key={`passive-${skill.id}`}
                       className="bg-background-alt border-border-primary rounded border p-3 text-sm space-y-1"
-                    >
+                  >
                       <div>
-                        <span className="text-accent-foreground font-semibold">
-                          {skill.name} (Rank {skill.rank}):
-                        </span>
-                        <span className="ml-2 text-text-secondary">
-                          {skill.description}
-                        </span>
+                    <span className="text-accent-foreground font-semibold">
+                      {skill.name} (Rank {skill.rank}):
+                    </span>
+                    <span className="ml-2 text-text-secondary">
+                      {skill.description}
+                    </span>
                       </div>
                       {effectsDescription && (
                         <div className="text-xs text-green-400 italic">
                           Effect: {effectsDescription}
                         </div>
                       )}
-                    </li>
+                  </li>
                   );
                 })}
               </ul>

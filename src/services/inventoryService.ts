@@ -873,21 +873,21 @@ export async function useConsumableItem(
     }
 
     // 6. Decrement/delete item instance
-     const currentQuantity = itemInstance.quantity;
+    const currentQuantity = itemInstance.quantity;
      console.log(`[useConsumableItem] Before Decrement: currentQuantity=${currentQuantity}`);
-     if (currentQuantity > 1) {
-       const { error: updateItemError } = await supabase
-         .from("hunter_inventory_items")
-         .update({ quantity: currentQuantity - 1 })
-         .eq("instance_id", inventoryInstanceId);
-       if (updateItemError) throw new Error(`DB error updating item quantity: ${updateItemError.message}`);
-     } else {
-       const { error: deleteError } = await supabase
-         .from("hunter_inventory_items")
-         .delete()
-         .eq("instance_id", inventoryInstanceId);
-       if (deleteError) throw new Error(`DB error deleting item: ${deleteError.message}`);
-     }
+    if (currentQuantity > 1) {
+      const { error: updateItemError } = await supabase
+        .from("hunter_inventory_items")
+        .update({ quantity: currentQuantity - 1 })
+        .eq("instance_id", inventoryInstanceId);
+      if (updateItemError) throw new Error(`DB error updating item quantity: ${updateItemError.message}`);
+    } else {
+      const { error: deleteError } = await supabase
+        .from("hunter_inventory_items")
+        .delete()
+        .eq("instance_id", inventoryInstanceId);
+      if (deleteError) throw new Error(`DB error deleting item: ${deleteError.message}`);
+    }
 
     // 7. Construct success message
     let message = `Used ${itemName}.`;

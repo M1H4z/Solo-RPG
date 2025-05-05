@@ -414,7 +414,7 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                     }
 
                 } catch (err: any) {
-                     console.error("Error during post-combat win processing:", err);
+                    console.error("Error during post-combat win processing:", err);
                     toast.error("Failed to process all victory results", { description: err.message });
                     
                     setRoomStatus('cleared'); 
@@ -450,7 +450,7 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                         critDamage: derivedStats.critDamage ?? 1.5,
                         precision: derivedStats.precision ?? 0,
                         expProgressInCurrentLevel: derivedStats.expProgressInCurrentLevel ?? 0,
-                        currentMp: derivedStats.currentMP ?? 0, 
+                        currentMp: derivedStats.currentMP ?? 0,
                         maxMp: derivedStats.maxMP ?? 1,
                         equippedSkills: Array.isArray(hunterDataForStats.equippedSkills) ? hunterDataForStats.equippedSkills : [],
                     });
@@ -484,15 +484,15 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
         // Only recover if the combat actually ended (win/loss/flee), not just stat save fail
         if (combatOutcomeProcessed) { 
             console.log(`[MP Recovery Trigger] Combat ended (${result}), attempting MP recovery for ${hunterId}...`);
-             try {
+            try {
                  const mpRecoveryResponse = await fetch(`/api/hunters/${hunterId}/recover-mp`, {
                      method: 'POST',
-                 });
+                });
                  const mpRecoveryResult = await mpRecoveryResponse.json();
                  if (!mpRecoveryResponse.ok) {
                      console.error("Error triggering MP recovery:", mpRecoveryResult.error);
                      // Don't necessarily show error to user unless it failed badly
-                 } else {
+                } else {
                      console.log("MP recovery initiated.", mpRecoveryResult);
                      // Update local state IF the recovery was immediate and returned data
                      if (mpRecoveryResult.updatedHunter) {
@@ -503,15 +503,15 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                          // const derivedStats = calculateDerivedStats(mpRecoveryResult.updatedHunter as Hunter);
                          // setPlayerCombatStats(prev => ({ ...prev, ...derivedStats }));
                      }
-                 }
-             } catch (err: any) {
+                }
+            } catch (err: any) {
                  console.error("Unexpected error triggering MP recovery:", err);
-             }
+            }
         } else {
             console.log("[MP Recovery Trigger] Combat outcome not fully processed, skipping MP recovery attempt.");
         }
         // Remove the surrounding /* ... */
-        // --- End MP Recovery --- 
+        // --- End MP Recovery ---
     };
     // ------------------------
 
