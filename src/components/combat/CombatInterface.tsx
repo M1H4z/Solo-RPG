@@ -109,6 +109,13 @@ interface ModifiableCombatStats {
 }
 // --- END Add Type ---
 
+// --- Add Logging Helper Component ---
+const DebugLogProps = ({ data, label }: { data: any, label: string }) => {
+    console.log(`[${label} Render Log]`, data);
+    return null; // This component doesn't render anything visually
+};
+// --- END Logging Helper Component ---
+
 export default function CombatInterface({ 
     gateId, 
     hunterData, 
@@ -160,7 +167,11 @@ export default function CombatInterface({
     const [isSkillMenuOpen, setIsSkillMenuOpen] = useState(false);
     const [usableSkills, setUsableSkills] = useState<Skill[]>([]);
     const [isLoadingSkills, setIsLoadingSkills] = useState(false);
-    // ---------------------------
+    // --- State for Skill Cooldowns ---
+    const [skillCooldowns, setSkillCooldowns] = useState<{ [skillId: string]: number }>({});
+    // --- END State ---
+
+    // --- State for Round Tracking ---
 
     // --- Effect to determine initial turn order --- 
     useEffect(() => {
@@ -289,6 +300,11 @@ export default function CombatInterface({
         } else {
             // --- Enemy just finished -> ROUND COMPLETE: Determine START of NEXT round via speed check --- 
             console.log("[End Turn v3 - Round Complete]: Enemy finished. Re-evaluating speed for next round.");
+            
+            // --- DECREMENT PLAYER SKILL COOLDOWNS HERE --- 
+            // decrementSkillCooldowns(); // REMOVED FROM HERE
+            // ---------------------------------------------
+
             const playerStartsNextRound = effectivePlayer.speed >= effectiveEnemy.speed;
             console.log(`[End Turn v3 - Next Round Check]: Player Speed (${effectivePlayer.speed}) vs Enemy Speed (${effectiveEnemy.speed}) -> Player Starts Next: ${playerStartsNextRound}`);
             
@@ -298,10 +314,14 @@ export default function CombatInterface({
             if (playerStartsNextRound) {
                 addLog(`${hunterData.name}'s turn.`);
                 console.log("[End Turn v3 - Round Complete]: Starting next round with Player.");
+                // --- Decrement Cooldowns JUST BEFORE Player Turn Starts ---
+                decrementSkillCooldowns(); 
+                // ----------------------------------------------------------
                 setIsProcessingAction(false); // Enable player actions
             } else {
                 addLog(`${enemyData.name}'s turn.`);
                  console.log("[End Turn v3 - Round Complete]: Starting next round with Enemy.");
+                // Cooldowns will decrement later when this enemy turn finishes and player gets turn
                 setIsProcessingAction(true);
                 setTimeout(() => handleEnemyTurn(effectiveEnemy, effectivePlayer), 1000);
             }
@@ -625,7 +645,13 @@ export default function CombatInterface({
             const response = await fetch('/api/items/use', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ hunterId: hunterData.id, inventoryInstanceId: inventoryId }),
+                body: JSON.stringify({ 
+                    hunterId: hunterData.id, 
+                    inventoryInstanceId: inventoryId, 
+                    // Send current client-side HP/MP
+                    currentHp: combatState.playerHp, 
+                    currentMp: combatState.playerMp,
+                }),
             });
 
             const result = await response.json();
@@ -679,16 +705,42 @@ export default function CombatInterface({
     const handleUseSkill = async (skillId: string) => {
         const usedSkill = usableSkills.find(s => s.id === skillId);
         if (!playerTurn || combatPhase !== 'fighting' || isProcessingAction || !usedSkill || usedSkill.type !== 'active') return;
+
+        // --- Check Cooldown FIRST ---
+        const currentCooldown = skillCooldowns[skillId] || 0;
+        if (currentCooldown > 0) {
+            addLog(`${usedSkill.name} is on cooldown (${currentCooldown} turn${currentCooldown > 1 ? 's' : ''} left).`);
+            toast.warning(`${usedSkill.name} on Cooldown`, { description: `${currentCooldown} turn${currentCooldown > 1 ? 's' : ''} remaining.` });
+            return;
+        }
+        // --- END Cooldown Check ---
+
         if (!usedSkill.manaCost || combatState.playerMp < usedSkill.manaCost) {
             addLog(`Not enough MP for ${usedSkill.name}.`);
             toast.warning(`Not enough MP`, { description: `Required: ${usedSkill.manaCost}, Have: ${combatState.playerMp}` });
             return; 
         }
+
+        // --- Process Skill Use --- 
         setIsProcessingAction(true);
         setIsSkillMenuOpen(false); 
         const currentMp = combatState.playerMp;
         setCombatState(prev => ({ ...prev, playerMp: prev.playerMp - usedSkill.manaCost! })); 
         addLog(`${hunterData.name} uses ${usedSkill.name}!`);
+
+        // --- Set Cooldown AFTER successful use ---
+        if (usedSkill.cooldown && usedSkill.cooldown > 0) {
+             console.log(`[handleUseSkill] Setting cooldown for ${usedSkill.name} (${usedSkill.id}) to ${usedSkill.cooldown}`);
+             // Set cooldown + 1 because it will tick down at the *end* of this turn sequence
+             // --- Use Functional Update (Restored) --- 
+             setSkillCooldowns(prevCooldowns => ({
+                  ...prevCooldowns, // Keep existing cooldowns
+                  [skillId]: usedSkill.cooldown! + 1 // Add/update the new one
+             })); 
+             // --- END Functional Update ---
+        }
+        // --- END Set Cooldown ---
+
         setPlayerAnimation('attack'); 
         
         // --- Use current effective stats from state ---
@@ -876,6 +928,37 @@ export default function CombatInterface({
     };
     // --- END FIX ---
 
+    // --- Add function to decrement SKILL cooldowns (Restored Functional Update) ---
+    const decrementSkillCooldowns = () => {
+        console.log("[Decrement Skill Cooldowns - Functional]: Checking state before update call.");
+
+        // Use functional update to guarantee atomicity based on latest state
+        setSkillCooldowns(prevCooldowns => {
+            console.log("[Decrement Skill Cooldowns - Functional]: Processing state:", prevCooldowns);
+            const finalNextCooldowns: { [skillId: string]: number } = {};
+            let actuallyChanged = false;
+            for (const skillId in prevCooldowns) {
+                const remaining = prevCooldowns[skillId];
+                if (remaining > 1) {
+                    finalNextCooldowns[skillId] = remaining - 1;
+                    actuallyChanged = true;
+                } else {
+                     console.log(`[Decrement Skill Cooldowns - Functional]: Cooldown ended for ${skillId}`);
+                     actuallyChanged = true; 
+                }
+            }
+            
+            if (actuallyChanged) {
+                 console.log("[Decrement Skill Cooldowns - Functional]: New state determined:", finalNextCooldowns);
+                 return finalNextCooldowns;
+            } else {
+                 console.log("[Decrement Skill Cooldowns - Functional]: No change needed based on latest state.");
+                 return prevCooldowns; // Return previous state if no changes occurred
+            }
+        });
+    };
+    // --- END ---
+
     return (
         // Main container
         <div 
@@ -1020,39 +1103,55 @@ export default function CombatInterface({
 
              {/* Skill Selection Menu */}
             {isSkillMenuOpen && (
-                <div className="absolute bottom-2 left-2 right-2 flex flex-col justify-end gap-2 md:bottom-4 md:left-auto md:right-4 md:w-48 md:justify-start pointer-events-auto z-30">
-                    {/* Scrollable container for skill buttons */}                   
-                    <div className="flex flex-col-reverse md:flex-col gap-2 overflow-y-auto max-h-40"> 
-                        {isLoadingSkills ? (
-                            <p className="text-xs text-center text-text-secondary italic p-2">Loading skills...</p>
-                        ) : usableSkills.length > 0 ? (
-                            usableSkills.map(skill => (
-                                <Button 
-                                    key={skill.id}
-                                    variant="outline" 
-                                    className="w-full justify-between text-xs md:text-sm px-2 py-1 md:px-3 md:py-2 whitespace-nowrap overflow-hidden text-ellipsis" // Use justify-between for MP cost
-                                    onClick={() => handleUseSkill(skill.id)}
-                                    disabled={isProcessingAction || combatState.playerMp < (skill.manaCost ?? 0)} // Also disable if not enough MP
-                                    title={`${skill.name} - Cost: ${skill.manaCost} MP`}
-                                >
-                                    <span className="truncate">{skill.name}</span> 
-                                    <span className="ml-2 text-blue-400 shrink-0">{skill.manaCost} MP</span>
-                                </Button>
-                            ))
-                        ) : (
-                            <p className="text-xs text-center text-text-secondary italic p-2">No skills equipped or available.</p>
-                        )}
+                <>
+                    {/* Use helper component to log state when menu renders */}
+                    <DebugLogProps data={skillCooldowns} label="Skill Menu" />
+                    <div className="absolute bottom-2 left-2 right-2 flex flex-col justify-end gap-2 md:bottom-4 md:left-auto md:right-4 md:w-48 md:justify-start pointer-events-auto z-30">
+                        {/* Scrollable container for skill buttons */}
+                        <div className="flex flex-col-reverse md:flex-col gap-2 overflow-y-auto max-h-40"> 
+                            {isLoadingSkills ? (
+                                <p className="text-xs text-center text-text-secondary italic p-2">Loading skills...</p>
+                            ) : usableSkills.length > 0 ? (
+                                usableSkills.map(skill => {
+                                    const remainingCooldown = skillCooldowns[skill.id] || 0;
+                                    const hasEnoughMp = combatState.playerMp >= (skill.manaCost ?? 0);
+                                    const isOnCooldown = remainingCooldown > 0;
+                                    const isDisabled = isProcessingAction || !hasEnoughMp || isOnCooldown;
+
+                                    return (
+                                        <Button 
+                                            key={skill.id}
+                                            variant="outline" 
+                                            className="w-full justify-between text-xs md:text-sm px-2 py-1 md:px-3 md:py-2 whitespace-nowrap overflow-hidden text-ellipsis disabled:opacity-50"
+                                            onClick={() => handleUseSkill(skill.id)}
+                                            disabled={isDisabled} 
+                                            title={`${skill.name}${skill.manaCost ? ` - Cost: ${skill.manaCost} MP` : ''}${isOnCooldown ? ` - CD: ${remainingCooldown}` : ''}`}
+                                        >
+                                            <span className="truncate">{skill.name}</span> 
+                                            {/* Show MP cost OR Cooldown remaining */}
+                                            {isOnCooldown ? (
+                                                <span className="ml-2 text-yellow-400 shrink-0">CD: {remainingCooldown}</span>
+                                            ) : skill.manaCost ? (
+                                                <span className={`ml-2 shrink-0 ${hasEnoughMp ? 'text-blue-400' : 'text-red-500'}`}>{skill.manaCost} MP</span>
+                                            ) : null}
+                                        </Button>
+                                    );
+                                })
+                            ) : (
+                                <p className="text-xs text-center text-text-secondary italic p-2">No skills equipped or available.</p>
+                            )}
+                        </div>
+                         {/* Back Button */}
+                        <Button 
+                            variant="outline" 
+                            className="w-full justify-center text-xs md:text-sm px-2 py-1 md:px-3 md:py-2 text-destructive" 
+                            onClick={() => setIsSkillMenuOpen(false)} 
+                            disabled={isLoadingSkills || isProcessingAction}
+                        >
+                             &larr; Back 
+                        </Button>
                     </div>
-                     {/* Back Button */}
-                    <Button 
-                        variant="outline" 
-                        className="w-full justify-center text-xs md:text-sm px-2 py-1 md:px-3 md:py-2 text-destructive" 
-                        onClick={() => setIsSkillMenuOpen(false)} 
-                        disabled={isLoadingSkills || isProcessingAction}
-                    >
-                         &larr; Back 
-                    </Button>
-                </div>
+                </>
             )}
 
             {/* Victory Popup */}

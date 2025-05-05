@@ -8,12 +8,15 @@ import { Database } from '@/lib/supabase/database.types';
 import { toast, Toaster } from 'sonner';
 import { Badge } from '@/components/ui/Badge'; // For Rarity - Corrected casing
 import { Separator } from '@/components/ui/Separator';
+import { Coins, Gem } from 'lucide-react'; // Import icons
 
 // Assuming Item type matches the DB row + any client-side processing needs
 type Item = Database['public']['Tables']['items']['Row'];
 
 interface ShopClientContentProps {
     hunterId: string; // Required now, as page redirects if missing
+    initialGold: number; // Add initial currency props
+    initialDiamonds: number;
 }
 
 /**
@@ -132,11 +135,18 @@ const ShopItemCard: React.FC<{
 /**
  * Fetches and displays shop items, handles purchase actions.
  */
-export default function ShopClientContent({ hunterId }: ShopClientContentProps) {
+export default function ShopClientContent({ 
+    hunterId, 
+    initialGold, 
+    initialDiamonds 
+}: ShopClientContentProps) {
     const [items, setItems] = useState<Item[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [purchaseLoading, setPurchaseLoading] = useState<Set<string>>(new Set()); // Tracks IDs of items being purchased
+    // Add state for currency - initialized from props
+    const [currentGold, setCurrentGold] = useState(initialGold);
+    const [currentDiamonds, setCurrentDiamonds] = useState(initialDiamonds);
 
     // Fetch items on mount
     useEffect(() => {
@@ -184,8 +194,15 @@ export default function ShopClientContent({ hunterId }: ShopClientContentProps) 
 
             // Success
             toast.success(result.message || 'Item purchased successfully!');
-            // TODO: Optionally trigger a refetch of hunter currency data if displayed nearby
-            // For now, user will see updated balance on next page load or profile visit.
+            
+            // >> NEW: Update local currency state from API response <<
+            if (typeof result.updatedGold === 'number') {
+                setCurrentGold(result.updatedGold);
+            }
+            if (typeof result.updatedDiamonds === 'number') {
+                setCurrentDiamonds(result.updatedDiamonds);
+            }
+            // >> END NEW <<
 
         } catch (err: any) {
             console.error("Purchase error:", err);
@@ -199,7 +216,25 @@ export default function ShopClientContent({ hunterId }: ShopClientContentProps) 
         }
     }, [hunterId, purchaseLoading]);
 
-    // Render Logic
+    // Render Logic for Currency Card (Moved from Server Component)
+    const renderCurrencyCard = () => (
+        <Card className="mb-6 sm:mb-8">
+             <CardContent className="p-3 sm:p-4">
+                 <div className="flex justify-center items-center gap-6 sm:gap-8">
+                     <div className="flex items-center gap-2">
+                         <Coins className="h-5 w-5 text-yellow-500" />
+                         <span className="text-base font-medium text-text-primary">{currentGold.toLocaleString()}</span> 
+                     </div>
+                     <div className="flex items-center gap-2">
+                         <Gem className="h-5 w-5 text-blue-400" />
+                         <span className="text-base font-medium text-text-primary">{currentDiamonds.toLocaleString()}</span> 
+                     </div>
+                 </div>
+             </CardContent>
+        </Card>
+    );
+
+    // Main component rendering logic
     if (loading) {
         return (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -221,15 +256,20 @@ export default function ShopClientContent({ hunterId }: ShopClientContentProps) 
     return (
         <>
             <Toaster position="bottom-right" richColors />
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {items.map((item) => (
-                    <ShopItemCard
-                        key={item.id}
-                        item={item}
-                        onPurchase={handlePurchase}
-                        isPurchasing={purchaseLoading.has(item.id)}
-                    />
-                ))}
+            <div className="space-y-6">
+                {/* Render the currency card */}
+                {renderCurrencyCard()}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {items.map((item) => (
+                        <ShopItemCard
+                            key={item.id}
+                            item={item}
+                            onPurchase={handlePurchase}
+                            isPurchasing={purchaseLoading.has(item.id)}
+                        />
+                    ))}
+                </div>
             </div>
         </>
     );

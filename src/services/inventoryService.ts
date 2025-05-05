@@ -739,10 +739,13 @@ export async function dropInventoryItem(
 export async function useConsumableItem(
   hunterId: string,
   inventoryInstanceId: string,
+  // Add optional parameters for client-provided current stats
+  currentHpFromClient?: number,
+  currentMpFromClient?: number,
 ): Promise<{
   success: boolean;
   message: string;
-  updatedStats?: { currentHp: number; currentMp: number };
+  updatedStats?: { currentHp?: number; currentMp?: number };
 }> {
   const session = await getUserSession();
   if (!session?.user) {
@@ -764,18 +767,25 @@ export async function useConsumableItem(
   }
 
   try {
-    // --- FIX: Fetch Full Hunter Data --- 
+    // Fetch Full Hunter Data (needed for stats to calculate max HP/MP)
     const fullHunterData = await getHunterById(hunterId); // Use getHunterById
     if (!fullHunterData) {
         throw new Error('Hunter not found when trying to use item.');
     }
     // Calculate derived stats to get accurate max HP/MP including bonuses
     const derivedStats = calculateDerivedStats(fullHunterData);
-    const maxHp = derivedStats.maxHP ?? 0; // Use calculated max HP
-    const maxMp = derivedStats.maxMP ?? 0; // Use calculated max MP
-    let currentHp = fullHunterData.currentHp ?? maxHp; // Start with current HP from fetched data
-    let currentMp = fullHunterData.currentMp ?? maxMp; // Start with current MP from fetched data
-    // --- END FIX ---
+    const maxHp = derivedStats.maxHP ?? 0; 
+    const maxMp = derivedStats.maxMP ?? 0; 
+
+    // Use client-provided HP/MP if valid, otherwise default to fetched value (or max if null)
+    let currentHp = (typeof currentHpFromClient === 'number' && currentHpFromClient >= 0)
+        ? currentHpFromClient
+        : fullHunterData.currentHp ?? maxHp;
+    let currentMp = (typeof currentMpFromClient === 'number' && currentMpFromClient >= 0)
+        ? currentMpFromClient
+        : fullHunterData.currentMp ?? maxMp;
+
+    console.log(`[useConsumableItem] Using Initial Stats - From Client: HP=${currentHpFromClient}, MP=${currentMpFromClient}. Effective Start: HP=${currentHp}, MP=${currentMp}`);
 
     // 1. Fetch item instance details including base item type and effects
     const { data: itemInstance, error: findError } = await supabase
@@ -832,6 +842,7 @@ export async function useConsumableItem(
 
     console.log('[useConsumableItem] Initial currentHp:', currentHp, 'MaxHP:', maxHp); // Now uses derived MaxHP
     console.log('[useConsumableItem] Item Effects:', effects);
+    console.log(`[useConsumableItem] BEFORE HP CALC: currentHp=${currentHp}, maxHp=${maxHp}, effects.heal=${effects.heal}, alreadyFullHp=${alreadyFullHp}`);
     if (typeof effects.heal === 'number' && !alreadyFullHp) { 
       console.log('[useConsumableItem] Applying heal effect:', effects.heal);
       const potentialHp = currentHp + effects.heal;
@@ -852,14 +863,20 @@ export async function useConsumableItem(
     // 5. Update hunter stats in DB if changed
     console.log(`[useConsumableItem] Before DB Update Check: hpRestored=${hpRestored}, mpRestored=${mpRestored}`);
     if (hpRestored > 0 || mpRestored > 0) {
-      const updatePayload = {
-        current_hp: currentHp, // Use the locally updated currentHp
-        current_mp: currentMp  // Use the locally updated currentMp
-      };
+      // --- FIX: Only include changed stats in payload ---
+      const updatePayload: Partial<Pick<Tables<'hunters'>, 'current_hp' | 'current_mp'>> = {};
+      if (hpRestored > 0) {
+          updatePayload.current_hp = currentHp;
+      }
+      if (mpRestored > 0) {
+          updatePayload.current_mp = currentMp;
+      }
+      // --- END FIX ---
+      
       console.log('[useConsumableItem] Preparing to update hunter stats:', updatePayload);
       const { error: updateStatsError } = await supabase
         .from('hunters')
-        .update(updatePayload)
+        .update(updatePayload) // Use dynamically built payload
         .eq('id', hunterId);
       
       if (updateStatsError) {
@@ -895,11 +912,17 @@ export async function useConsumableItem(
     if (hpRestored > 0) message += ` Restored ${hpRestored} HP.`;
     if (mpRestored > 0) message += ` Restored ${mpRestored} MP.`;
 
-    console.log('[useConsumableItem] Returning message:', message, 'Updated Stats:', { currentHp, currentMp });
+    // --- FIX: Only return changed stats --- 
+    const returnedStats: { currentHp?: number; currentMp?: number } = {};
+    if (hpRestored > 0) returnedStats.currentHp = currentHp;
+    if (mpRestored > 0) returnedStats.currentMp = currentMp;
+    // --- END FIX ---
+
+    console.log('[useConsumableItem] Returning message:', message, 'Updated Stats:', returnedStats);
     return {
       success: true,
       message,
-      updatedStats: { currentHp, currentMp }, // Return the final current values
+      updatedStats: returnedStats, // Return only the changed stats
     };
 
   } catch (error: any) {
