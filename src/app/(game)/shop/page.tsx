@@ -1,19 +1,34 @@
-"use client";
-
 import React, { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import ShopClientContent from '@/components/shop/ShopClientContent';
-import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
 import RealTimeClock from "@/components/ui/RealTimeClock";
+// Import hunter service
+import { getHunterById } from '@/services/hunterService'; 
+import { getUserSession } from '@/services/authService';
+// Import Icons
+import { Coins, Gem } from 'lucide-react';
+// Import cookies and the server client creator
+import { cookies } from 'next/headers';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 interface ShopPageProps {
     searchParams?: { [key: string]: string | string[] | undefined };
 }
 
 // Wrap the main logic in a separate component for Suspense
-function ShopPageContent({ hunterId }: { hunterId: string }) {
+// Make it async to fetch data, accept hunter props
+async function ShopPageContent({ 
+    hunterId,
+    initialGold,
+    initialDiamonds
+}: { 
+    hunterId: string,
+    initialGold: number,
+    initialDiamonds: number
+}) {
     return (
         <div className="container mx-auto space-y-8 px-4 py-8">
              <Card className="mb-6 sm:mb-8 sticky top-0 z-50">
@@ -32,26 +47,58 @@ function ShopPageContent({ hunterId }: { hunterId: string }) {
                  </CardHeader>
              </Card>
 
-            {/* Client component handles fetching and display */}
-            <ShopClientContent hunterId={hunterId} />
+             {/* Pass initial currency down - Client component will manage its own state */}
+             <ShopClientContent 
+                hunterId={hunterId} 
+                initialGold={initialGold} 
+                initialDiamonds={initialDiamonds} 
+            />
         </div>
     );
 }
 
-export default function ShopPage({ searchParams }: ShopPageProps) {
+// Make the main export async
+export default async function ShopPage({ searchParams }: ShopPageProps) { 
     const hunterId = searchParams?.hunterId;
 
     // Require hunterId to access the shop
     if (!hunterId || typeof hunterId !== 'string') {
         console.warn("ShopPage: hunterId missing or invalid, redirecting to hunters selection.");
-        // Redirect to hunter selection if no ID is provided
         redirect('/hunters');
     }
 
-    // Use Suspense for cleaner handling of searchParams potentially being async in future Next.js versions
+    // --- Fetch Hunter Data ---
+    // Create the Supabase client using cookies()
+    const cookieStore = cookies();
+    const supabase = createSupabaseServerClient(cookieStore);
+    
+    // Pass the created client to service functions
+    const session = await getUserSession(supabase); 
+    // Fetch only required fields for efficiency, passing the client
+    const hunterData = await getHunterById(hunterId, ['id', 'gold', 'diamonds'], supabase); 
+
+    if (!hunterData) {
+        console.error(`ShopPage: Hunter not found with ID: ${hunterId}`);
+        // Redirect or show error if hunter isn't found
+        redirect('/hunters?error=HunterNotFound'); 
+    }
+    
+    // Check ownership if needed (assuming getHunterById doesn't do this already)
+    // if (session?.user?.id !== hunterData.user_id) { 
+    //     console.warn(`ShopPage: User ${session?.user?.id} attempted to access shop for hunter ${hunterId} owned by ${hunterData.user_id}`);
+    //     redirect('/hunters?error=AccessDenied');
+    // }
+    // --- End Fetch ---
+
+
+    // Pass fetched data to the content component
     return (
         <Suspense fallback={<div className="p-10 text-center">Loading Shop...</div>}>
-            <ShopPageContent hunterId={hunterId} />
+            <ShopPageContent 
+                hunterId={hunterId} 
+                initialGold={hunterData.gold ?? 0} 
+                initialDiamonds={hunterData.diamonds ?? 0}
+            />
         </Suspense>
     );
 }

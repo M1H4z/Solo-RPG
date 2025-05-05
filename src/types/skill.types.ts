@@ -45,12 +45,28 @@ type CritChanceOnHitEffect = {
 
 // --- END FIX ---
 
-// TODO: Add DebuffEffect, StatusEffect types here as needed
+// --- Define DebuffEffect --- 
+// Similar to BuffEffect, but amount is typically negative or affects the target
+type DebuffEffect = {
+  type: 'debuff';
+  stat:
+    | 'attackPower' 
+    | 'defense' 
+    | 'speed'       
+    | 'evasion'     
+    | 'precision'   
+    // Add other targetable stats as needed (e.g., maybe critRate reduction?)
+    ; 
+  amount: number; // Usually a negative value for debuffs reducing stats
+  duration?: number; // Duration in turns
+};
+// --- END Define DebuffEffect ---
+
+// TODO: Add StatusEffect type here as needed
 // type StatusEffect = { type: 'status', statusType: 'poison' | 'burn' | 'stun', chance: number, duration: number };
-// type DebuffEffect = { type: 'debuff', stat: string, amount: number, duration: number };
 
 // Discriminated union for all possible effects
-export type SkillEffect = DamageEffect | HealEffect | BuffEffect | CritChanceOnHitEffect /* | StatusEffect | DebuffEffect | ... other types */;
+export type SkillEffect = DamageEffect | HealEffect | BuffEffect | CritChanceOnHitEffect | DebuffEffect /* | StatusEffect | ... other types */;
 
 // --- END NEW EFFECT TYPE DEFINITIONS ---
 

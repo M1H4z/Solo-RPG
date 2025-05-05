@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server';
 import { getUserSession } from '@/services/authService';
 import { useConsumableItem } from '@/services/inventoryService';
+import { NextRequest } from 'next/server';
 
 interface UseItemPayload {
     hunterId: string;
     inventoryInstanceId: string;
+    currentHp: number;
+    currentMp: number;
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
     const session = await getUserSession();
     if (!session?.user) {
         return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
@@ -20,7 +23,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: false, message: 'Invalid JSON body' }, { status: 400 });
     }
 
-    const { hunterId, inventoryInstanceId } = payload;
+    const { hunterId, inventoryInstanceId, currentHp, currentMp } = payload;
 
     if (!hunterId || !inventoryInstanceId) {
         return NextResponse.json({ success: false, message: 'Missing hunterId or inventoryInstanceId' }, { status: 400 });
@@ -28,7 +31,12 @@ export async function POST(request: Request) {
 
     try {
         console.log(`[API /items/use] Attempting to use item: Hunter=${hunterId}, Instance=${inventoryInstanceId}`);
-        const result = await useConsumableItem(hunterId, inventoryInstanceId);
+        const result = await useConsumableItem(
+            hunterId,
+            inventoryInstanceId,
+            currentHp,
+            currentMp
+        );
         console.log(`[API /items/use] Result:`, result);
 
         // Determine status code based on success

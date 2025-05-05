@@ -23,6 +23,10 @@ interface EnemyCombatEntity {
     attackPower: number;
     defense: number;
     baseExpYield: number;
+    precision: number;
+    evasion: number;
+    speed: number;
+    isBoss: boolean;
 }
 interface PlayerCombatEntity {
     id: string;
@@ -41,6 +45,8 @@ interface PlayerCombatEntity {
     currentMp: number;
     maxMp: number;
     equippedSkills: string[];
+    evasion: number;
+    speed: number;
 }
 
 // Type for the active gate data
@@ -129,6 +135,8 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                 currentMp: derivedStats.currentMP ?? 0,
                 maxMp: derivedStats.maxMP ?? 1,
                 equippedSkills: Array.isArray(fetchedHunter.equippedSkills) ? fetchedHunter.equippedSkills : [],
+                evasion: derivedStats.evasion ?? 0,
+                speed: derivedStats.speed ?? 0,
             };
             setPlayerCombatStats(combatStats); // Store the stats needed for CombatInterface
 
@@ -229,17 +237,23 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                 return;
             }
             
-            // TODO: Fetch real enemy data based on gate/depth/room
-            setEnemyCombatData({
+            // --- Create MOCK Enemy Data ---
+            const mockEnemy: EnemyCombatEntity = {
                 id: 'goblin-scout',
                 name: 'Goblin Scout',
-                currentHp: 30, maxHp: 30,
-                level: 3,
-                attackPower: 10,
-                defense: 5,
-                baseExpYield: 25
-            });
-            // ----------------------------------------------
+                level: 3, // Hardcoded Level
+                maxHp: 40, // Hardcoded HP
+                currentHp: 40, // Hardcoded HP
+                attackPower: 8, // Hardcoded Attack
+                defense: 5, // Hardcoded Defense
+                baseExpYield: 15, // Hardcoded EXP Yield
+                precision: 10, // Example: 10% precision
+                evasion: 5,    // Example: 5% evasion
+                speed: 12,     // Example: Speed value
+                isBoss: false,
+            };
+            setEnemyCombatData(mockEnemy);
+            // --- End Mock Data ---
             
             setRoomStatus('combat'); // Set status to combat only AFTER data is ready
         }
@@ -414,7 +428,7 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                     }
 
                 } catch (err: any) {
-                     console.error("Error during post-combat win processing:", err);
+                    console.error("Error during post-combat win processing:", err);
                     toast.error("Failed to process all victory results", { description: err.message });
                     
                     setRoomStatus('cleared'); 
@@ -450,9 +464,11 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                         critDamage: derivedStats.critDamage ?? 1.5,
                         precision: derivedStats.precision ?? 0,
                         expProgressInCurrentLevel: derivedStats.expProgressInCurrentLevel ?? 0,
-                        currentMp: derivedStats.currentMP ?? 0, 
+                        currentMp: derivedStats.currentMP ?? 0,
                         maxMp: derivedStats.maxMP ?? 1,
                         equippedSkills: Array.isArray(hunterDataForStats.equippedSkills) ? hunterDataForStats.equippedSkills : [],
+                        evasion: derivedStats.evasion ?? 0,
+                        speed: derivedStats.speed ?? 0,
                     });
                 } else {
                     console.error("Cannot recalculate combat stats: No hunter data available after combat resolution.");
@@ -484,15 +500,15 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
         // Only recover if the combat actually ended (win/loss/flee), not just stat save fail
         if (combatOutcomeProcessed) { 
             console.log(`[MP Recovery Trigger] Combat ended (${result}), attempting MP recovery for ${hunterId}...`);
-             try {
+            try {
                  const mpRecoveryResponse = await fetch(`/api/hunters/${hunterId}/recover-mp`, {
                      method: 'POST',
-                 });
+                });
                  const mpRecoveryResult = await mpRecoveryResponse.json();
                  if (!mpRecoveryResponse.ok) {
                      console.error("Error triggering MP recovery:", mpRecoveryResult.error);
                      // Don't necessarily show error to user unless it failed badly
-                 } else {
+                } else {
                      console.log("MP recovery initiated.", mpRecoveryResult);
                      // Update local state IF the recovery was immediate and returned data
                      if (mpRecoveryResult.updatedHunter) {
@@ -503,15 +519,15 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                          // const derivedStats = calculateDerivedStats(mpRecoveryResult.updatedHunter as Hunter);
                          // setPlayerCombatStats(prev => ({ ...prev, ...derivedStats }));
                      }
-                 }
-             } catch (err: any) {
+                }
+            } catch (err: any) {
                  console.error("Unexpected error triggering MP recovery:", err);
-             }
+            }
         } else {
             console.log("[MP Recovery Trigger] Combat outcome not fully processed, skipping MP recovery attempt.");
         }
         // Remove the surrounding /* ... */
-        // --- End MP Recovery --- 
+        // --- End MP Recovery ---
     };
     // ------------------------
 

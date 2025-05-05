@@ -16,18 +16,23 @@ import { HUNTER_BASE_COLUMNS } from "@/constants/dbConstants"; // Import the con
 import { calculateMaxHP, calculateMaxMP } from "@/lib/game/stats";
 // Import calculateDerivedStats and DerivedStats
 import { calculateDerivedStats, DerivedStats } from "@/lib/game/stats";
+// Import SupabaseClient type
+import { SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * Processes raw hunter data and combines with inventory/equipment.
+ * Modified to accept supabase client instance.
  */
 export async function processAndCombineHunterData(
   dbHunter: any,
+  supabaseClient?: SupabaseClient<Database> // Accept client instance
 ): Promise<Hunter | null> {
   if (!dbHunter) return null;
 
-  const supabase = createSupabaseServerClient(); // Get client instance
+  // Use provided client or create one (fallback, should ideally not be needed in this flow)
+  const supabase = supabaseClient || createSupabaseServerClient(); 
 
-  // Fetch inventory and equipment concurrently
+  // Fetch inventory and equipment concurrently, passing the client down
   const [inventory, equipment] = await Promise.all([
     getHunterInventory(dbHunter.id, supabase),
     getHunterEquipment(dbHunter.id, supabase),
@@ -188,9 +193,16 @@ export async function deleteMyHunter(
 
 /**
  * Fetches a specific hunter by ID for the user, including inventory and equipment.
+ * Modified to accept supabase client instance.
+ * Modified to accept optional array of fields to select.
  */
-export async function getHunterById(hunterId: string): Promise<Hunter | null> {
-  const session = await getUserSession();
+export async function getHunterById(
+  hunterId: string,
+  fieldsToSelect: (keyof Database['public']['Tables']['hunters']['Row'])[] | null = null,
+  supabaseClient?: SupabaseClient<Database> // Accept client instance
+): Promise<Hunter | null> {
+  // Pass client down to getUserSession
+  const session = await getUserSession(supabaseClient);
   if (!session?.user) {
     console.log("getHunterById: No session, returning null.");
     return null;
@@ -201,38 +213,35 @@ export async function getHunterById(hunterId: string): Promise<Hunter | null> {
     return null;
   }
 
-  const supabase = createSupabaseServerClient();
+  // Use provided client or create one (fallback)
+  const supabase = supabaseClient || createSupabaseServerClient(); 
   const userId = session.user.id;
 
   try {
-    // Use the defined base columns constant
-    const { data: dbHunter, error } = await supabase
+    // Determine columns to select
+    const columnsToSelect = fieldsToSelect ? fieldsToSelect.join(", ") : HUNTER_BASE_COLUMNS;
+    
+    const { data, error } = await supabase
       .from("hunters")
-      .select(HUNTER_BASE_COLUMNS) // Use constant
+      .select(columnsToSelect)
       .eq("id", hunterId)
       .eq("user_id", userId) // Ensure ownership
-      .maybeSingle();
+      .maybeSingle(); // Use maybeSingle for cleaner null handling
 
     if (error) {
-      // No need to check for PGRST116 specifically if using maybeSingle
       console.error("getHunterById: DB error:", error);
       throw new Error(`Database error fetching hunter: ${error.message}`);
     }
 
-    if (!dbHunter) {
-      console.log(
-        `getHunterById: Hunter ${hunterId} not found or not owned by user ${userId}.`,
-      );
+    if (!data) {
+      console.log(`getHunterById: Hunter ${hunterId} not found for user ${userId}.`);
       return null;
     }
 
-    // Process raw data
-    return await processAndCombineHunterData(dbHunter);
+    // Pass the client down to processing function
+    return processAndCombineHunterData(data, supabase);
   } catch (error) {
-    console.error(
-      `getHunterById: Unexpected error for hunter ${hunterId}:`,
-      error,
-    );
+    console.error("getHunterById: Unexpected error:", error);
     throw error;
   }
 }
