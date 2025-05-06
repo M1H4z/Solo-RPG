@@ -36,14 +36,13 @@ export async function POST(
   const hunterId = params.hunterId;
   const supabase = createSupabaseServerClient();
 
-  // Basic validation
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) {
+  // 1. Check Authentication
+  const { data: { user }, error: userError } = await supabase.auth.getUser(); // Use getUser
+  if (userError || !user) { // Check user and error
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  // TODO: Add check if hunter belongs to session user
+
+  // TODO: Add check if hunter belongs to the authenticated user (user.id)
 
   if (!hunterId) {
     return NextResponse.json(

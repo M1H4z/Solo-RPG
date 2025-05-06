@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { dropInventoryItem } from "@/services/inventoryService";
-import { getUserSession } from "@/services/authService";
+import { getAuthenticatedUser } from "@/services/authService";
 
 export async function POST(
   request: Request,
   { params }: { params: { hunterId: string } },
 ) {
-  const session = await getUserSession();
-  if (!session?.user) {
+  const user = await getAuthenticatedUser();
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

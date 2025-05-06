@@ -12,10 +12,10 @@ export async function GET(request: Request) {
     const supabase = createSupabaseRouteHandlerClient();
 
     // 1. Check Authentication
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-    if (sessionError || !session) {
-        console.error('Error getting session or no session:', sessionError);
+    if (userError || !user) {
+        console.error('Error getting user or no user:', userError);
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

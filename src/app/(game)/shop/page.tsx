@@ -7,7 +7,7 @@ import Link from 'next/link';
 import RealTimeClock from "@/components/ui/RealTimeClock";
 // Import hunter service
 import { getHunterById } from '@/services/hunterService'; 
-import { getUserSession } from '@/services/authService';
+import { getAuthenticatedUser } from '@/services/authService';
 // Import Icons
 import { Coins, Gem } from 'lucide-react';
 // Import cookies and the server client creator
@@ -73,7 +73,12 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
     const supabase = createSupabaseServerClient(cookieStore);
     
     // Pass the created client to service functions
-    const session = await getUserSession(supabase); 
+    const user = await getAuthenticatedUser(supabase);
+    if (!user) {
+        console.warn("ShopPage: User not authenticated, redirecting to login.");
+        redirect('/login?message=Please login to access the shop');
+    }
+
     // Fetch only required fields for efficiency, passing the client
     const hunterData = await getHunterById(hunterId, ['id', 'gold', 'diamonds'], supabase); 
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { getUserSession } from '@/services/authService';
+import { getAuthenticatedUser } from '@/services/authService';
 import { calculateMaxMP } from '@/lib/game/stats'; // Import for potential fallback
 
 // Constants for MP Recovery Calculation
@@ -13,12 +13,14 @@ export async function POST(
     { params }: { params: { hunterId: string } }
 ) {
     const supabase = createSupabaseServerClient();
-    const session = await getUserSession();
+    const user = await getAuthenticatedUser();
     const { hunterId } = params;
 
-    if (!session?.user) {
+    if (!user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const userId = user.id;
+
     if (!hunterId) {
         return NextResponse.json({ error: 'Hunter ID is required' }, { status: 400 });
     }
@@ -29,7 +31,7 @@ export async function POST(
             .from('hunters')
             .select('intelligence, level, current_mp')
             .eq('id', hunterId)
-            .eq('user_id', session.user.id) // Ensure ownership
+            .eq('user_id', userId)
             .single();
 
         if (fetchError) {

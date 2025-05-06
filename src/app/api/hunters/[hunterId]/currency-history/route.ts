@@ -23,10 +23,10 @@ export async function GET(request: Request, { params }: { params: Params }) {
 
     try {
         // 1. Check Authentication
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) throw new Error(sessionError.message); // Throw session error
-        if (!session) throw new Error('Unauthorized: No active session'); // Use specific error message
-        const userId = session.user.id;
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError) throw new Error(userError.message);
+        if (!user) throw new Error('Unauthorized: No authenticated user');
+        const userId = user.id;
 
         // 2. Verify Hunter Ownership (Explicit Check)
         const { data: hunterData, error: hunterError } = await supabase
@@ -78,7 +78,7 @@ export async function GET(request: Request, { params }: { params: Params }) {
         console.error('API Error in GET /currency-history:', error.message, error); // Log full error too
         // Return appropriate status code based on error message
         if (error.message?.startsWith('Unauthorized')) {
-            return NextResponse.json({ error: 'Unauthorized: No active session' }, { status: 401 });
+            return NextResponse.json({ error: 'Unauthorized: No authenticated user' }, { status: 401 });
         }
         if (error.message?.startsWith('Forbidden')) {
              return NextResponse.json({ error: 'Forbidden: You do not own this hunter' }, { status: 403 });

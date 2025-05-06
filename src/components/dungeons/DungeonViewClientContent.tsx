@@ -47,6 +47,7 @@ interface PlayerCombatEntity {
     equippedSkills: string[];
     evasion: number;
     speed: number;
+    cooldownReduction?: number; // Added for CDR
 }
 
 // Type for the active gate data
@@ -137,6 +138,7 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                 equippedSkills: Array.isArray(fetchedHunter.equippedSkills) ? fetchedHunter.equippedSkills : [],
                 evasion: derivedStats.evasion ?? 0,
                 speed: derivedStats.speed ?? 0,
+                cooldownReduction: (derivedStats.cooldownReduction ?? 0) / 100, // Convert to decimal
             };
             setPlayerCombatStats(combatStats); // Store the stats needed for CombatInterface
 
@@ -469,6 +471,7 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                         equippedSkills: Array.isArray(hunterDataForStats.equippedSkills) ? hunterDataForStats.equippedSkills : [],
                         evasion: derivedStats.evasion ?? 0,
                         speed: derivedStats.speed ?? 0,
+                        cooldownReduction: (derivedStats.cooldownReduction ?? 0) / 100, // Convert to decimal here too
                     });
                 } else {
                     console.error("Cannot recalculate combat stats: No hunter data available after combat resolution.");

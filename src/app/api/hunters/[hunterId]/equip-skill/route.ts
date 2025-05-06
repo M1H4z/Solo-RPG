@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { equipSkill } from "@/services/skillService";
-import { getUserSession } from "@/services/authService";
+import { getAuthenticatedUser } from "@/services/authService";
 
 export async function POST(
   request: Request,
@@ -11,13 +11,12 @@ export async function POST(
     `[API /equip-skill] Received request for hunter: ${params.hunterId}`,
   );
   const supabase = createSupabaseServerClient();
-  const session = await getUserSession();
+  const user = await getAuthenticatedUser();
 
-  if (!session?.user) {
-    console.error("[API /equip-skill] Unauthorized: No user session.");
+  if (!user) {
+    console.error("[API /equip-skill] Unauthorized: No authenticated user.");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const user = session.user;
   console.log(`[API /equip-skill] User authenticated: ${user.id}`);
 
   let skillId: string;

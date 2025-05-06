@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { getUserSession } from '@/services/authService';
+import { getAuthenticatedUser } from '@/services/authService';
 import { LootDrop } from '@/constants/lootTables.constants'; // Import type
 import { addInventoryItem } from '@/services/inventoryService'; // Import the service function
 
@@ -13,12 +13,14 @@ export async function POST(
     request: Request,
     { params }: { params: { hunterId: string } }
 ) {
-    const session = await getUserSession(); // Still need session for user ID and potentially gold adjustment
+    const user = await getAuthenticatedUser(); // Call new function
     const { hunterId } = params;
 
-    if (!session?.user) {
+    if (!user) { // Check for user object
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const userId = user.id; // Use user.id
+
     if (!hunterId) {
         return NextResponse.json({ error: 'Hunter ID is required' }, { status: 400 });
     }
@@ -48,7 +50,7 @@ export async function POST(
             const { error: goldError } = await supabase
                 .rpc('adjust_hunter_gold', { // Use RPC for atomic increment
                      p_hunter_id: hunterId,
-                     p_user_id: session.user.id,
+                     p_user_id: userId, // Use userId
                      p_amount: goldToAdd
                 });
 

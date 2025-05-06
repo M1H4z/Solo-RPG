@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getUserSession } from "@/services/authService";
+import { getAuthenticatedUser } from "@/services/authService";
 import { gainExperience } from "@/services/hunterService"; // Import the service function
 
 export const dynamic = "force-dynamic";
@@ -11,9 +11,9 @@ interface RouteContext {
 // POST handler to add experience using the service layer
 export async function POST(request: Request, context: RouteContext) {
   const { hunterId } = context.params;
-  const session = await getUserSession();
+  const user = await getAuthenticatedUser();
 
-  if (!session?.user) {
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   if (!hunterId) {

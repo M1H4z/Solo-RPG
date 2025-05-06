@@ -53,13 +53,13 @@ export async function GET(request: Request, { params }: RouteParams) {
     const supabase = createSupabaseRouteHandlerClient();
     const { hunterId } = params;
 
-    // 1. Get User Session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !session) {
-        console.error('Combat Stats API: Unauthorized - No session');
+    // 1. Get Authenticated User
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+        console.error('Combat Stats API: Unauthorized - No user found or error', userError);
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const userId = session.user.id;
+    const userId = user.id;
 
     // 2. Validate hunterId
     if (!hunterId) {

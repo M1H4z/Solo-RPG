@@ -2,7 +2,7 @@
 // 'use server';
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getUserSession } from "./authService";
+import { getAuthenticatedUser } from "./authService";
 import { Database, Tables } from "@/lib/supabase/database.types";
 import {
   InventoryItem,
@@ -244,16 +244,17 @@ export async function addInventoryItem(
   updatedInventory?: InventoryItem[];
   error?: string;
 }> {
-  const session = await getUserSession();
-  if (!session?.user) {
-    return { success: false, error: "Unauthorized: No session" };
+  const user = await getAuthenticatedUser();
+  if (!user) {
+    return { success: false, error: "Unauthorized: No user" };
   }
   const supabase: SupabaseClient<Database> = createSupabaseServerClient();
+  const userId = user.id;
 
   // Verify Ownership
   const isOwner = await verifyHunterOwnership(
     hunterId,
-    session.user.id,
+    userId,
     supabase,
   );
   if (!isOwner) {
@@ -378,12 +379,15 @@ export async function equipItemToSpecificSlot(
   inventoryInstanceId: string,
   targetSlot: EquipmentSlotType,
 ): Promise<{ success: boolean; updatedEquipment?: EquipmentSlots; error?: string; }> {
-  const session = await getUserSession();
-  if (!session?.user) {
-    return { success: false, error: "Unauthorized: No session" };
+  const user = await getAuthenticatedUser();
+  if (!user) {
+    return { success: false, error: "Unauthorized" };
   }
   const supabase: SupabaseClient<Database> = createSupabaseServerClient();
-  const isOwner = await verifyHunterOwnership(hunterId, session.user.id, supabase);
+  const userId = user.id;
+
+  // 1. Verify hunter ownership
+  const isOwner = await verifyHunterOwnership(hunterId, userId, supabase);
   if (!isOwner) {
     return {
       success: false,
@@ -486,16 +490,17 @@ export async function equipItem(
   updatedEquipment?: EquipmentSlots;
   error?: string;
 }> {
-  const session = await getUserSession();
-  if (!session?.user) {
-    return { success: false, error: "Unauthorized: No session" };
+  const user = await getAuthenticatedUser();
+  if (!user) {
+    return { success: false, error: "Unauthorized" };
   }
   const supabase: SupabaseClient<Database> = createSupabaseServerClient();
+  const userId = user.id;
 
-  // Verify Ownership
+  // 1. Verify hunter ownership
   const isOwner = await verifyHunterOwnership(
     hunterId,
-    session.user.id,
+    userId,
     supabase,
   );
   if (!isOwner) {
@@ -589,16 +594,17 @@ export async function unequipItem(
   updatedEquipment?: EquipmentSlots;
   error?: string;
 }> {
-  const session = await getUserSession();
-  if (!session?.user) {
-    return { success: false, error: "Unauthorized: No session" };
+  const user = await getAuthenticatedUser();
+  if (!user) {
+    return { success: false, error: "Unauthorized" };
   }
   const supabase: SupabaseClient<Database> = createSupabaseServerClient();
+  const userId = user.id;
 
-  // Verify Ownership
+  // 1. Verify Hunter Ownership
   const isOwner = await verifyHunterOwnership(
     hunterId,
-    session.user.id,
+    userId,
     supabase,
   );
   if (!isOwner) {
@@ -650,16 +656,17 @@ export async function dropInventoryItem(
   updatedInventory?: InventoryItem[];
   error?: string;
 }> {
-  const session = await getUserSession();
-  if (!session?.user) {
-    return { success: false, error: "Unauthorized: No session" };
+  const user = await getAuthenticatedUser();
+  if (!user) {
+    return { success: false, error: "Unauthorized" };
   }
   const supabase: SupabaseClient<Database> = createSupabaseServerClient();
+  const userId = user.id;
 
-  // Verify Ownership
+  // 1. Verify Hunter Ownership
   const isOwner = await verifyHunterOwnership(
     hunterId,
-    session.user.id,
+    userId,
     supabase,
   );
   if (!isOwner) {
@@ -747,16 +754,20 @@ export async function useConsumableItem(
   message: string;
   updatedStats?: { currentHp?: number; currentMp?: number };
 }> {
-  const session = await getUserSession();
-  if (!session?.user) {
-    return { success: false, message: "Unauthorized: No session" };
+  const user = await getAuthenticatedUser();
+  if (!user) {
+    return {
+      success: false,
+      message: "Unauthorized: No authenticated user.",
+    };
   }
   const supabase: SupabaseClient<Database> = createSupabaseServerClient();
+  const userId = user.id;
 
   // Verify Ownership
   const isOwner = await verifyHunterOwnership(
     hunterId,
-    session.user.id,
+    userId,
     supabase,
   );
   if (!isOwner) {

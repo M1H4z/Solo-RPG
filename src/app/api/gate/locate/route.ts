@@ -36,12 +36,12 @@ export async function POST(request: Request) {
     const cookieStore = cookies();
     const supabase = createSupabaseRouteHandlerClient();
 
-    // 1. Get User Session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !session) {
+    // 1. Get Authenticated User
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const userId = session.user.id;
+    const userId = user.id;
 
     // 2. Validate Input
     let inputData;

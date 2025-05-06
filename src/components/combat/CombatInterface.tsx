@@ -53,6 +53,7 @@ interface PlayerCombatEntity {
     // Add missing stats for hit/miss and turn order
     evasion: number;   // percent (0-100)
     speed: number;     // determines turn order
+    cooldownReduction?: number; // e.g., 0.2 for 20% CDR
 }
 
 interface CombatInterfaceProps {
@@ -305,6 +306,8 @@ export default function CombatInterface({
             // decrementSkillCooldowns(); // REMOVED FROM HERE
             // ---------------------------------------------
 
+            // Add console.log for dynamic turn order check
+            console.log(`[Dynamic Turn Order Check] Effective Player Speed: ${effectivePlayer.speed}, Effective Enemy Speed: ${effectiveEnemy.speed}`);
             const playerStartsNextRound = effectivePlayer.speed >= effectiveEnemy.speed;
             console.log(`[End Turn v3 - Next Round Check]: Player Speed (${effectivePlayer.speed}) vs Enemy Speed (${effectiveEnemy.speed}) -> Player Starts Next: ${playerStartsNextRound}`);
             
@@ -730,14 +733,21 @@ export default function CombatInterface({
 
         // --- Set Cooldown AFTER successful use ---
         if (usedSkill.cooldown && usedSkill.cooldown > 0) {
-             console.log(`[handleUseSkill] Setting cooldown for ${usedSkill.name} (${usedSkill.id}) to ${usedSkill.cooldown}`);
-             // Set cooldown + 1 because it will tick down at the *end* of this turn sequence
-             // --- Use Functional Update (Restored) --- 
-             setSkillCooldowns(prevCooldowns => ({
-                  ...prevCooldowns, // Keep existing cooldowns
-                  [skillId]: usedSkill.cooldown! + 1 // Add/update the new one
-             })); 
-             // --- END Functional Update ---
+            const cdrPercentage = currentEffectivePlayerStats.cooldownReduction || 0; // Get CDR, default to 0
+            const baseSkillCooldown = usedSkill.cooldown;
+
+            // Calculate the number of turns the player actually has to wait
+            // If baseSkillCooldown is 1 and CDR makes it <0.5, it rounds to 0 wait turns (usable next turn).
+            const actualWaitTime = Math.max(0, Math.round(baseSkillCooldown * (1 - cdrPercentage)));
+
+            console.log(`[handleUseSkill] Base CD: ${baseSkillCooldown}, CDR: ${cdrPercentage * 100}%, Actual Wait: ${actualWaitTime} turns. Setting stored CD for ${usedSkill.name} (${usedSkill.id})`);
+            
+            // The value stored is actualWaitTime + 1 because decrementSkillCooldowns runs at the end of the turn sequence.
+            // This means if actualWaitTime is 0, it's stored as 1, and becomes available after the current turn's decrement.
+            setSkillCooldowns(prevCooldowns => ({
+                ...prevCooldowns, // Keep existing cooldowns
+                [skillId]: actualWaitTime + 1 
+            })); 
         }
         // --- END Set Cooldown ---
 

@@ -8,35 +8,35 @@ import { SupabaseClient } from "@supabase/supabase-js"; // Import SupabaseClient
 
 // NOTE: The actual signup/signin/signout logic now resides in /api/auth routes
 
-// Function to get the current user session on the server (e.g., in Server Components)
-export async function getUserSession(supabaseClient?: SupabaseClient<Database>) {
-  // Use the provided client if available, otherwise create one (though this shouldn't happen in the server component flow)
+// Function to get the current authenticated user on the server
+export async function getAuthenticatedUser(supabaseClient?: SupabaseClient<Database>) {
+  // Use the provided client if available, otherwise create one
   const supabase = supabaseClient || createSupabaseServerClient();
   try {
     const {
-      data: { session },
+      data: { user }, // Get the user object directly
       error,
-    } = await supabase.auth.getSession();
+    } = await supabase.auth.getUser(); // Use getUser()
     if (error) throw error;
-    return session;
+    return user; // Return the user object
   } catch (error) {
-    console.error("Error getting session:", error);
+    console.error("Error getting authenticated user:", error);
     return null;
   }
 }
 
 // Function to get the user profile data from public.users
 export async function getUserProfile(supabaseClient?: SupabaseClient<Database>) {
-  // Pass the client down to getUserSession
-  const session = await getUserSession(supabaseClient);
-  if (!session?.user) return null;
+  // Get the authenticated user instead of the session
+  const user = await getAuthenticatedUser(supabaseClient);
+  if (!user) return null; // Check if user exists
 
   // Use the provided client if available, otherwise create one
   const supabase = supabaseClient || createSupabaseServerClient();
   const { data, error } = await supabase
     .from("users")
     .select("id, username, email, country")
-    .eq("auth_id", session.user.id)
+    .eq("auth_id", user.id) // Use user.id
     .single();
 
   // PGRST116: No rows found - expected if profile fetch happens before trigger creates it
