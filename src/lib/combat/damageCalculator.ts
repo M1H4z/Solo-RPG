@@ -1,5 +1,16 @@
 // src/lib/combat/damageCalculator.ts
 
+import { HunterClass } from "@/constants/classes";
+import { EnemyType } from "@/types/enemy.types";
+import {
+    CLASS_VS_CLASS_MODIFIERS,
+    CLASS_VS_ENEMY_TYPE_MODIFIERS,
+    ENEMY_TYPE_VS_CLASS_MODIFIERS,
+    MODIFIER_STRONG_VALUE,
+    MODIFIER_WEAK_VALUE,
+    MODIFIER_NEUTRAL_VALUE
+} from "@/constants/gameModifiers";
+
 // --- Tunable Constants ---
 /// Controls how strongly defense diminishes incoming damage
 const DEFENSE_MITIGATION_BASE = 100;
@@ -14,12 +25,18 @@ interface AttackerStats {
   critRate: number; // as percent (0-100)
   critDamage: number; // total multiplier, e.g. 1.5 for +50%
   precision: number; // as percent (0-100)
+  // Add fields for class/type modifiers
+  entityCategory: 'hunter' | 'enemy' | 'hunter_npc';
+  classOrType: HunterClass | EnemyType;
 }
 
 interface DefenderStats {
   level?: number; // Optional for backward compatibility or mobs without levels?
   defense: number;
   isBoss?: boolean; // Optional flag on defender data
+  // Add fields for class/type modifiers
+  entityCategory: 'hunter' | 'enemy' | 'hunter_npc';
+  classOrType: HunterClass | EnemyType;
 }
 
 interface ActionDetails {
@@ -91,6 +108,78 @@ export function calculateDamage({
   const randomMultiplier = Math.random() * (1.0 - minVariance) + minVariance; // Random between minVariance and 1.0
   let finalDamage = Math.floor(critDamage * randomMultiplier);
 
+  // 6.5. Class/Type Effectiveness Modifier
+  let classTypeModifier = MODIFIER_NEUTRAL_VALUE;
+
+  if (attacker.entityCategory === 'hunter' && defender.entityCategory === 'enemy') {
+    // Player Hunter attacking Enemy (TypedEnemy)
+    const playerClass = attacker.classOrType as HunterClass;
+    const enemyType = defender.classOrType as EnemyType;
+    const modifiers = CLASS_VS_ENEMY_TYPE_MODIFIERS[playerClass];
+    if (modifiers) {
+        if (modifiers.strongAgainst.includes(enemyType)) {
+            classTypeModifier = MODIFIER_STRONG_VALUE;
+        } else if (modifiers.weakAgainst.includes(enemyType)) {
+            classTypeModifier = MODIFIER_WEAK_VALUE;
+        }
+    }
+  } else if (attacker.entityCategory === 'enemy' && defender.entityCategory === 'hunter') {
+    // Enemy (TypedEnemy) attacking Player Hunter
+    const enemyType = attacker.classOrType as EnemyType;
+    const playerClass = defender.classOrType as HunterClass;
+    const modifiers = ENEMY_TYPE_VS_CLASS_MODIFIERS[enemyType];
+    if (modifiers) {
+        if (modifiers.strongAgainst.includes(playerClass)) {
+            classTypeModifier = MODIFIER_STRONG_VALUE;
+        } else if (modifiers.weakAgainst.includes(playerClass)) {
+            classTypeModifier = MODIFIER_WEAK_VALUE;
+        }
+    }
+  } else if (
+    (attacker.entityCategory === 'hunter' || attacker.entityCategory === 'hunter_npc') &&
+    (defender.entityCategory === 'hunter' || defender.entityCategory === 'hunter_npc')
+  ) {
+    // Hunter vs Hunter (Player vs NPC, NPC vs Player, Player vs Player)
+    const attackerClass = attacker.classOrType as HunterClass;
+    const defenderClass = defender.classOrType as HunterClass;
+    const modifiers = CLASS_VS_CLASS_MODIFIERS[attackerClass];
+    if (modifiers) {
+        if (modifiers.strongAgainst.includes(defenderClass)) {
+            classTypeModifier = MODIFIER_STRONG_VALUE;
+        } else if (modifiers.weakAgainst.includes(defenderClass)) {
+            classTypeModifier = MODIFIER_WEAK_VALUE;
+        }
+    }
+  } else if (attacker.entityCategory === 'hunter_npc' && defender.entityCategory === 'enemy') {
+    // NPC Hunter attacking Typed Enemy
+    const npcClass = attacker.classOrType as HunterClass;
+    const enemyType = defender.classOrType as EnemyType;
+    const modifiers = CLASS_VS_ENEMY_TYPE_MODIFIERS[npcClass];
+    if (modifiers) {
+        if (modifiers.strongAgainst.includes(enemyType)) {
+            classTypeModifier = MODIFIER_STRONG_VALUE;
+        } else if (modifiers.weakAgainst.includes(enemyType)) {
+            classTypeModifier = MODIFIER_WEAK_VALUE;
+        }
+    }
+  } else if (attacker.entityCategory === 'enemy' && defender.entityCategory === 'hunter_npc') {
+    // Typed Enemy attacking NPC Hunter
+    const enemyType = attacker.classOrType as EnemyType;
+    const npcClass = defender.classOrType as HunterClass;
+    const modifiers = ENEMY_TYPE_VS_CLASS_MODIFIERS[enemyType];
+    if (modifiers) {
+        if (modifiers.strongAgainst.includes(npcClass)) {
+            classTypeModifier = MODIFIER_STRONG_VALUE;
+        } else if (modifiers.weakAgainst.includes(npcClass)) {
+            classTypeModifier = MODIFIER_WEAK_VALUE;
+        }
+    }
+  }
+  // Note: Enemy (Typed) vs Enemy (Typed) is not handled by these modifiers currently.
+  // If needed, a new ENEMY_TYPE_VS_ENEMY_TYPE_MODIFIERS could be added.
+
+  finalDamage = Math.floor(finalDamage * classTypeModifier);
+
   // 7. Contextual Modifiers
   if (context.isPvP) {
     finalDamage = Math.floor(finalDamage * 0.85); // PvP damage reduction
@@ -119,6 +208,7 @@ export function calculateDamage({
         minVariance,
         randomMultiplier,
         finalDamageBeforeContext: critDamage * randomMultiplier,
+        classTypeModifier,
         finalDamage
     }
     };

@@ -15,6 +15,8 @@ import { LootDrop } from '@/constants/lootTables.constants'; // Import type
 import { InventoryItem } from '@/types/item.types'; // Import InventoryItem type
 import { Skill, SkillEffect } from "@/types/skill.types"; 
 import { getSkillById } from "@/constants/skills";
+import { HunterClass } from "@/constants/classes"; // Corrected import: HunterClass
+import { EnemyType, EnemyDefinition } from "@/types/enemy.types";
 
 // Updated interfaces
 interface EnemyCombatEntity {
@@ -31,6 +33,10 @@ interface EnemyCombatEntity {
     precision: number; // percent (0-100)
     evasion: number;   // percent (0-100)
     speed: number;     // determines turn order
+    // Add entity category and class/type for modifiers
+    entityCategory: 'enemy' | 'hunter_npc'; 
+    classOrType: HunterClass | EnemyType; // Corrected type: HunterClass
+    spriteKey: string; // For rendering the correct enemy sprite
 }
 interface PlayerCombatEntity {
     id: string;
@@ -54,6 +60,8 @@ interface PlayerCombatEntity {
     evasion: number;   // percent (0-100)
     speed: number;     // determines turn order
     cooldownReduction?: number; // e.g., 0.2 for 20% CDR
+    class: HunterClass; // Corrected type: HunterClass
+    entityCategory: 'hunter'; // Player is always 'hunter'
 }
 
 interface CombatInterfaceProps {
@@ -341,16 +349,13 @@ export default function CombatInterface({
         setIsProcessingAction(true);
         setPlayerAnimation('attack');
 
-        // --- Use current effective stats from state ---
         const effectivePlayerStats = currentEffectivePlayerStats; 
         const effectiveEnemyStats = currentEffectiveEnemyStats; 
 
         setTimeout(() => {
             setPlayerAnimation('idle');
 
-            // --- Check for Hit --- 
             if (attackHits(effectivePlayerStats.precision, effectiveEnemyStats.evasion)) {
-                // --- HIT --- 
                 const damageResult: DamageResult = calculateDamage({
                     attacker: {
                         level: effectivePlayerStats.level,
@@ -358,11 +363,15 @@ export default function CombatInterface({
                         critRate: effectivePlayerStats.critRate,
                         critDamage: effectivePlayerStats.critDamage,
                         precision: effectivePlayerStats.precision,
+                        entityCategory: effectivePlayerStats.entityCategory,
+                        classOrType: effectivePlayerStats.class,
                     },
                     defender: {
-                        level: enemyData.level, // Base level is fine here
+                        level: enemyData.level, 
                         defense: effectiveEnemyStats.defense, 
                         isBoss: enemyData.isBoss,
+                        entityCategory: effectiveEnemyStats.entityCategory,
+                        classOrType: effectiveEnemyStats.classOrType,
                     },
                     action: {
                         actionPower: 10, 
@@ -554,11 +563,15 @@ export default function CombatInterface({
                         critRate: 5, 
                         critDamage: 1.5, 
                         precision: effectiveEnemyStats_EnemyTurn.precision, 
+                        entityCategory: effectiveEnemyStats_EnemyTurn.entityCategory,
+                        classOrType: effectiveEnemyStats_EnemyTurn.classOrType,
                     },
                     defender: {
                         level: effectivePlayerStats_EnemyTurn.level, // Use effective level if modified?
                         defense: effectivePlayerStats_EnemyTurn.defense, 
                         isBoss: false, 
+                        entityCategory: effectivePlayerStats_EnemyTurn.entityCategory,
+                        classOrType: effectivePlayerStats_EnemyTurn.class,
                     },
                     action: {
                         actionPower: 10, 
@@ -744,10 +757,10 @@ export default function CombatInterface({
             
             // The value stored is actualWaitTime + 1 because decrementSkillCooldowns runs at the end of the turn sequence.
             // This means if actualWaitTime is 0, it's stored as 1, and becomes available after the current turn's decrement.
-            setSkillCooldowns(prevCooldowns => ({
-                ...prevCooldowns, // Keep existing cooldowns
+             setSkillCooldowns(prevCooldowns => ({
+                  ...prevCooldowns, // Keep existing cooldowns
                 [skillId]: actualWaitTime + 1 
-            })); 
+             })); 
         }
         // --- END Set Cooldown ---
 
@@ -829,11 +842,15 @@ export default function CombatInterface({
                            critRate: effectivePlayerStats_Skill.critRate,
                            critDamage: effectivePlayerStats_Skill.critDamage,
                            precision: effectivePlayerStats_Skill.precision,
+                           entityCategory: effectivePlayerStats_Skill.entityCategory,
+                           classOrType: effectivePlayerStats_Skill.class,
                         },
                         defender: {
-                            level: enemyData.level, // Use base level
+                            level: enemyData.level, 
                             defense: effectiveEnemyStats_Skill.defense,
-                            isBoss: enemyData.isBoss
+                            isBoss: enemyData.isBoss,
+                            entityCategory: effectiveEnemyStats_Skill.entityCategory,
+                            classOrType: effectiveEnemyStats_Skill.classOrType,
                         },
                         action: {
                             actionPower: damageEffect.power || 10, 
