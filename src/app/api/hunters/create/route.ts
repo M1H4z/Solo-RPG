@@ -2,20 +2,20 @@ import { NextResponse } from "next/server";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase/server";
 import { HUNTER_CLASSES } from "@/constants/classes";
 import { HunterClass } from "@/constants/classes";
-import { getUserSession } from "@/services/authService";
+import { getAuthenticatedUser } from "@/services/authService";
 import { getMyHunters } from "@/services/hunterService";
 
 export const dynamic = "force-dynamic"; // Ensure dynamic execution
 
 export async function POST(request: Request) {
   const supabase = createSupabaseRouteHandlerClient();
-  const session = await getUserSession();
+  const user = await getAuthenticatedUser();
 
-  if (!session?.user) {
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const userId = session.user.id;
+  const userId = user.id;
   let formData;
   try {
     formData = await request.formData();

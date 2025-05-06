@@ -1,7 +1,7 @@
 "use server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getUserSession } from "./authService"; // Assuming authService is in the same directory
+import { getAuthenticatedUser } from "./authService"; // Import the new function
 import { Hunter } from "@/types/hunter.types"; // Import Hunter type
 import {
   calculateLevelFromExp,
@@ -100,14 +100,14 @@ export async function processAndCombineHunterData(
  * Fetches all hunters belonging to the user, including inventory and equipment.
  */
 export async function getMyHunters(): Promise<Hunter[]> {
-  const session = await getUserSession();
-  if (!session?.user) {
-    console.log("getMyHunters: No session, returning empty.");
+  const user = await getAuthenticatedUser(); // Call new function
+  if (!user) { // Check for user object
+    console.log("getMyHunters: No user, returning empty.");
     return [];
   }
 
   const supabase = createSupabaseServerClient();
-  const userId = session.user.id;
+  const userId = user.id; // Use user.id
 
   try {
     // Use the defined base columns constant
@@ -144,14 +144,14 @@ export async function getMyHunters(): Promise<Hunter[]> {
 export async function deleteMyHunter(
   hunterId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const session = await getUserSession();
-  if (!session?.user) {
-    console.log("No active session found, cannot delete hunter.");
+  const user = await getAuthenticatedUser(); // Call new function
+  if (!user) { // Check for user object
+    console.log("No authenticated user found, cannot delete hunter.");
     return { success: false, error: "Unauthorized" };
   }
 
   const supabase = createSupabaseServerClient();
-  const userId = session.user.id;
+  const userId = user.id; // Use user.id
 
   console.log(
     `Attempting to delete hunter ID: ${hunterId} for user ID: ${userId}`,
@@ -201,10 +201,10 @@ export async function getHunterById(
   fieldsToSelect: (keyof Database['public']['Tables']['hunters']['Row'])[] | null = null,
   supabaseClient?: SupabaseClient<Database> // Accept client instance
 ): Promise<Hunter | null> {
-  // Pass client down to getUserSession
-  const session = await getUserSession(supabaseClient);
-  if (!session?.user) {
-    console.log("getHunterById: No session, returning null.");
+  // Pass client down to getAuthenticatedUser
+  const user = await getAuthenticatedUser(supabaseClient); // Call new function
+  if (!user) { // Check for user object
+    console.log("getHunterById: No user, returning null.");
     return null;
   }
 
@@ -215,7 +215,7 @@ export async function getHunterById(
 
   // Use provided client or create one (fallback)
   const supabase = supabaseClient || createSupabaseServerClient(); 
-  const userId = session.user.id;
+  const userId = user.id; // Use user.id
 
   try {
     // Determine columns to select
@@ -257,9 +257,12 @@ export async function allocateStatPoint(
   hunterId: string,
   statName: string,
 ): Promise<{ success: boolean; updatedHunter?: Hunter; error?: string; message?: string }> {
-  const session = await getUserSession();
-  if (!session?.user) {
-    return { success: false, error: "Unauthorized" };
+  const user = await getAuthenticatedUser(); // Call new function
+  if (!user) { // Check for user object
+    return {
+      success: false,
+      error: "Unauthorized",
+    };
   }
 
   // Basic validation for inputs
@@ -269,7 +272,7 @@ export async function allocateStatPoint(
   }
 
   const supabase = createSupabaseServerClient();
-  const userId = session.user.id; // Needed if RPC function also checks owner
+  const userId = user.id; // Use user.id
 
   try {
     // Call the database function to perform the atomic update
@@ -341,16 +344,19 @@ export async function gainExperience(
   statPointsGained?: number;
   skillPointsGained?: number;
 }> {
-  const session = await getUserSession();
-  if (!session?.user) {
+  console.log(`[gainExperience Service] hunterId: ${hunterId}, amount: ${amount}`);
+  const user = await getAuthenticatedUser(); // Call new function
+  if (!user) { // Check for user object
+    console.log("[gainExperience Service] Unauthorized - No user found.");
     return { success: false, error: "Unauthorized" };
   }
+  const userId = user.id; // Use user.id
+
   if (!hunterId || amount == null || amount <= 0) {
     return { success: false, error: "Hunter ID and valid positive amount are required." };
   }
 
   const supabase = createSupabaseServerClient();
-  const userId = session.user.id;
 
   try {
     // 1. Fetch current hunter data - including fields needed for calculateDerivedStats

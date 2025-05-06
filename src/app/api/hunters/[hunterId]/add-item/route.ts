@@ -22,15 +22,12 @@ export async function POST(
   // Use the server client instance
   const supabase = createSupabaseServerClient();
 
-  // Simple validation: Ensure user owns this hunter (or is admin)
-  // Fetching session might be needed here depending on auth rules defined in RLS
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) {
+  // 1. Check Authentication
+  const { data: { user }, error: userError } = await supabase.auth.getUser(); // Use getUser
+  if (userError || !user) { // Check user and error
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  // TODO: Add more robust check if hunter belongs to session.user.id
+  // TODO: Add more robust check if hunter belongs to the authenticated user (user.id)
 
   if (!hunterId) {
     return NextResponse.json(

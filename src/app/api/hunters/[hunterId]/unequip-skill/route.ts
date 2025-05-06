@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { unequipSkill } from "@/services/skillService";
-import { getUserSession } from "@/services/authService"; // Correct function name
+import { getAuthenticatedUser } from "@/services/authService";
 
 export async function POST(
   request: Request,
@@ -11,14 +11,12 @@ export async function POST(
     `[API /unequip-skill] Received request for hunter: ${params.hunterId}`,
   );
   const supabase = createSupabaseServerClient();
-  const session = await getUserSession(); // Call correct function
+  const user = await getAuthenticatedUser();
 
-  if (!session?.user) {
-    // Check session and user
-    console.error("[API /unequip-skill] Unauthorized: No user session.");
+  if (!user) {
+    console.error("[API /unequip-skill] Unauthorized: No authenticated user.");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const user = session.user; // Extract user
   console.log(`[API /unequip-skill] User authenticated: ${user.id}`);
 
   let skillId: string;
@@ -51,7 +49,7 @@ export async function POST(
     console.log(
       `[API /unequip-skill] Calling unequipSkill service for user: ${user.id}, hunter: ${hunterId}, skill: ${skillId}`,
     );
-    const result = await unequipSkill(user.id, hunterId, skillId); // Use correct user variable
+    const result = await unequipSkill(user.id, hunterId, skillId);
     console.log(`[API /unequip-skill] unequipSkill service returned:`, result);
 
     if (!result.success) {
@@ -67,7 +65,6 @@ export async function POST(
     }
 
     console.log(`[API /unequip-skill] Success: ${result.message}`);
-    // Return success message AND updated hunter data
     return NextResponse.json({
       success: true,
       message: result.message,

@@ -1,18 +1,20 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { getUserSession } from '@/services/authService'; // Assuming authService is in services
+import { getAuthenticatedUser } from '@/services/authService'; // Import the new function
 
 export async function PATCH(
     request: Request,
     { params }: { params: { hunterId: string } }
 ) {
     const supabase = createSupabaseServerClient();
-    const session = await getUserSession();
+    const user = await getAuthenticatedUser(); // Call new function
     const { hunterId } = params;
 
-    if (!session?.user) {
+    if (!user) { // Check for user object
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const userId = user.id; // Use user.id
+
     if (!hunterId) {
         return NextResponse.json({ error: 'Hunter ID is required' }, { status: 400 });
     }
@@ -59,7 +61,7 @@ export async function PATCH(
             .from('hunters')
             .update(updates)
             .eq('id', hunterId)
-            .eq('user_id', session.user.id); // Ensure ownership
+            .eq('user_id', userId); // Ensure ownership using userId
 
         if (error) {
             console.error(`Error updating hunter stats for ${hunterId}:`, error);
@@ -68,7 +70,7 @@ export async function PATCH(
 
         if (count === 0) {
             // Could be wrong hunterId or user doesn't own it
-             console.warn(`Update current stats failed: Hunter ${hunterId} not found or not owned by user ${session.user.id}.`);
+             console.warn(`Update current stats failed: Hunter ${hunterId} not found or not owned by user ${userId}.`); // Use userId in log
              return NextResponse.json({ error: 'Hunter not found or access denied.' }, { status: 404 });
         }
 

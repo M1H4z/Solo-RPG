@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase/server";
-import { getUserSession } from "@/services/authService";
+import { getAuthenticatedUser } from "@/services/authService";
 import { deleteMyHunter, getHunterById } from "@/services/hunterService";
 
 export const dynamic = "force-dynamic";
@@ -12,10 +12,10 @@ interface DeleteParams {
 }
 
 export async function DELETE(request: Request, { params }: DeleteParams) {
-  const session = await getUserSession();
+  const user = await getAuthenticatedUser();
   const { hunterId } = params;
 
-  if (!session?.user) {
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

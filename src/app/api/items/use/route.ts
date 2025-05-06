@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getUserSession } from '@/services/authService';
+import { getAuthenticatedUser } from '@/services/authService';
 import { useConsumableItem } from '@/services/inventoryService';
 import { NextRequest } from 'next/server';
 
@@ -11,8 +11,8 @@ interface UseItemPayload {
 }
 
 export async function POST(request: NextRequest) {
-    const session = await getUserSession();
-    if (!session?.user) {
+    const user = await getAuthenticatedUser();
+    if (!user) {
         return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 

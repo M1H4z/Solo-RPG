@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { equipItemToSpecificSlot } from "@/services/inventoryService"; // We will create this service function next
-import { getUserSession } from "@/services/authService";
+import { getAuthenticatedUser } from "@/services/authService";
 import { isEquipmentSlotType } from "@/services/inventoryService"; // Import the type guard
 import { EquipmentSlotType } from "@/types/item.types";
 
@@ -8,8 +8,8 @@ export async function POST(
   request: Request,
   { params }: { params: { hunterId: string } },
 ) {
-  const session = await getUserSession();
-  if (!session?.user) {
+  const user = await getAuthenticatedUser();
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

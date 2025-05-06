@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getUserSession } from "@/services/authService";
+import { getAuthenticatedUser } from "@/services/authService";
 import { allocateStatPoint } from "@/services/hunterService"; // Import the service function
 
 export const dynamic = "force-dynamic";
@@ -20,9 +20,9 @@ const VALID_STATS = [
 // POST handler to allocate a single stat point using the service layer
 export async function POST(request: Request, context: RouteContext) {
   const { hunterId } = context.params;
-  const session = await getUserSession(); // Still need session check here for authorization context
+  const user = await getAuthenticatedUser();
 
-  if (!session?.user) {
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   if (!hunterId) {

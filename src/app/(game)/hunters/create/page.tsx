@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getUserSession } from "@/services/authService";
+import { getAuthenticatedUser } from "@/services/authService";
 import { getMyHunters } from "@/services/hunterService";
 import { HunterCreatorForm } from "@/components/hunters/HunterCreatorForm";
 
 export default async function CreateHunterPage() {
-  const session = await getUserSession();
-  if (!session?.user) {
+  const user = await getAuthenticatedUser();
+  if (!user) {
     redirect("/login");
   }
 

@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase/server";
-import { getUserSession } from "@/services/authService";
+import { getAuthenticatedUser } from "@/services/authService";
 import { getMyHunters } from "@/services/hunterService"; // Re-use the existing service function
 
 export const dynamic = "force-dynamic"; // Ensure fresh data on every request
 
 export async function GET(request: Request) {
-  const session = await getUserSession();
+  const user = await getAuthenticatedUser();
 
-  if (!session?.user) {
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
