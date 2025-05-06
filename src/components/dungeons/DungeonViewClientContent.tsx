@@ -12,6 +12,8 @@ import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react';
 import { Hunter } from '@/types/hunter.types'; // Import full Hunter type
 import { calculateDerivedStats } from '@/lib/game/stats'; // Import our main stat calculator
 import { LootResult } from '@/constants/lootTables.constants'; // Import LootResult type
+import { HunterClass } from "@/constants/classes"; // Import HunterClass
+import { EnemyType } from "@/types/enemy.types"; // Import EnemyType
 
 // Match interface structure from CombatInterface
 interface EnemyCombatEntity {
@@ -27,6 +29,10 @@ interface EnemyCombatEntity {
     evasion: number;
     speed: number;
     isBoss: boolean;
+    // Add fields to match CombatInterface
+    entityCategory: 'enemy' | 'hunter_npc'; 
+    classOrType: HunterClass | EnemyType;
+    spriteKey: string; 
 }
 interface PlayerCombatEntity {
     id: string;
@@ -48,6 +54,9 @@ interface PlayerCombatEntity {
     evasion: number;
     speed: number;
     cooldownReduction?: number; // Added for CDR
+    // Add fields to match CombatInterface's PlayerCombatEntity
+    class: HunterClass;
+    entityCategory: 'hunter';
 }
 
 // Type for the active gate data
@@ -122,7 +131,7 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
             const combatStats: PlayerCombatEntity = {
                 id: fetchedHunter.id,
                 name: fetchedHunter.name,
-                currentHp: derivedStats.currentHP ?? 0, // Use calculated currentHP
+                currentHp: derivedStats.currentHP ?? 0, 
                 maxHp: derivedStats.maxHP ?? 1,
                 level: fetchedHunter.level ?? 1,
                 attackPower: derivedStats.attackPower ?? 0,
@@ -130,7 +139,7 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                 currentExp: fetchedHunter.experience ?? 0,
                 expToNextLevel: derivedStats.expNeededForNextLevel ?? 1,
                 critRate: derivedStats.critRate ?? 0,
-                critDamage: derivedStats.critDamage ?? 1.5, // Default crit damage multiplier
+                critDamage: derivedStats.critDamage ?? 1.5, 
                 precision: derivedStats.precision ?? 0,
                 expProgressInCurrentLevel: derivedStats.expProgressInCurrentLevel ?? 0,
                 currentMp: derivedStats.currentMP ?? 0,
@@ -138,9 +147,12 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                 equippedSkills: Array.isArray(fetchedHunter.equippedSkills) ? fetchedHunter.equippedSkills : [],
                 evasion: derivedStats.evasion ?? 0,
                 speed: derivedStats.speed ?? 0,
-                cooldownReduction: (derivedStats.cooldownReduction ?? 0) / 100, // Convert to decimal
+                cooldownReduction: (derivedStats.cooldownReduction ?? 0) / 100, 
+                // Populate the new fields
+                class: fetchedHunter.class, // Assuming fetchedHunter has a class property
+                entityCategory: 'hunter', // Player is always 'hunter'
             };
-            setPlayerCombatStats(combatStats); // Store the stats needed for CombatInterface
+            setPlayerCombatStats(combatStats); 
 
             // TODO: Based on gateData.current_room, determine event type/position
             setRoomStatus('pending'); // Ready to interact
@@ -243,19 +255,22 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
             const mockEnemy: EnemyCombatEntity = {
                 id: 'goblin-scout',
                 name: 'Goblin Scout',
-                level: 3, // Hardcoded Level
-                maxHp: 40, // Hardcoded HP
-                currentHp: 40, // Hardcoded HP
-                attackPower: 8, // Hardcoded Attack
-                defense: 5, // Hardcoded Defense
-                baseExpYield: 15, // Hardcoded EXP Yield
-                precision: 10, // Example: 10% precision
-                evasion: 5,    // Example: 5% evasion
-                speed: 12,     // Example: Speed value
+                currentHp: 50,
+                maxHp: 50,
+                level: 3,
+                attackPower: 12,
+                defense: 5,
+                baseExpYield: 15,
+                precision: 20, 
+                evasion: 10,   
+                speed: 12,     
                 isBoss: false,
+                entityCategory: 'enemy', // Correct category
+                classOrType: 'Humanoid', // Corrected: Use a defined EnemyType
+                spriteKey: 'goblin_scout', // Assuming this key matches an actual sprite
             };
             setEnemyCombatData(mockEnemy);
-            // --- End Mock Data ---
+            // --- END MOCK ---
             
             setRoomStatus('combat'); // Set status to combat only AFTER data is ready
         }
@@ -454,7 +469,6 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                     setPlayerCombatStats({
                         id: hunterDataForStats.id,
                         name: hunterDataForStats.name,
-                        // Use the derived currentHP/MP which reflects API updates (level up or saved stats)
                         currentHp: derivedStats.currentHP ?? 0, 
                         maxHp: derivedStats.maxHP ?? 1,
                         level: hunterDataForStats.level ?? 1,
@@ -471,7 +485,10 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                         equippedSkills: Array.isArray(hunterDataForStats.equippedSkills) ? hunterDataForStats.equippedSkills : [],
                         evasion: derivedStats.evasion ?? 0,
                         speed: derivedStats.speed ?? 0,
-                        cooldownReduction: (derivedStats.cooldownReduction ?? 0) / 100, // Convert to decimal here too
+                        cooldownReduction: (derivedStats.cooldownReduction ?? 0) / 100, 
+                        // Add the missing fields
+                        class: hunterDataForStats.class, // Assuming hunterDataForStats contains the class
+                        entityCategory: 'hunter',
                     });
                 } else {
                     console.error("Cannot recalculate combat stats: No hunter data available after combat resolution.");
