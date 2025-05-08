@@ -18,9 +18,9 @@ import HunterStatsAllocator from "@/components/hunters/HunterStatsAllocator"; //
 import { calculateDerivedStats } from "@/lib/game/stats"; // Updated Import Path
 import { Separator } from "@/components/ui/Separator"; // Import Separator
 import RealTimeClock from "@/components/ui/RealTimeClock"; // Removed .tsx
-import { Classes, ClassesData } from "@/constants/classes.constants";
-import { fetcher } from "@/lib/utils";
+import { HUNTER_CLASSES } from "@/constants/classes";
 import { Coins, Gem } from "lucide-react"; // Import currency icons
+import { WalletConnectButton } from "@/components/solana/WalletConnectButton";
 
 // Define rank requirements (could be moved to constants later)
 const RANK_UP_REQUIREMENTS = {
@@ -275,6 +275,7 @@ function DashboardContent() {
                    <p>Level: <span className="font-semibold">{hunter.level}</span></p>
                    <p>Class: <span className="font-semibold">{hunter.class}</span></p>
                    <p>Rank: <span className="font-semibold">{hunter.rank}</span></p>
+                   <Separator className="my-2 bg-border-dark" />
                    <p className="flex items-center"> 
                        <Coins className="mr-1.5 h-4 w-4 text-yellow-500" /> 
                        Gold: <span className="font-semibold ml-1">{(hunter.gold ?? 0).toLocaleString()}</span>
@@ -283,6 +284,8 @@ function DashboardContent() {
                        <Gem className="mr-1.5 h-4 w-4 text-blue-400" /> 
                        Diamonds: <span className="font-semibold ml-1">{(hunter.diamonds ?? 0).toLocaleString()}</span>
                    </p>
+                   <WalletConnectButton />
+                   <Separator className="my-2 bg-border-dark" />
                 </div>
                 
                 <Separator />
