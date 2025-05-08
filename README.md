@@ -1,73 +1,113 @@
-# Solo Leveling RPG
+# Solo RPG
 
-A web-based text RPG inspired by Solo Leveling with Pokémon-style turn-based combat mechanics and logic.
+A web-based RPG inspired by Solo Leveling, featuring turn-based combat, blockchain-powered NFTs, and a player-driven marketplace. Built with Next.js, TypeScript, TailwindCSS, Supabase, Solana, and Phaser.js.
 
-## Features
+---
 
-- **Account System**: Registration, login, and user management
-- **Hunter System**: Create and manage hunters with different classes
-- **Skills System**: Skill trees with active and passive abilities
-- **Inventory System**: Equipment management and item collection
-- **Shop System**: In-game economy with gold and premium currency
-- **Dungeon System**: Procedurally generated dungeons with random events
-- **Combat System**: Turn-based combat inspired by Pokémon
+## 🚀 Project Vision
 
-## Tech Stack
+Solo RPG is a modern, solo-friendly RPG that blends classic dungeon-crawling, Pokémon-style combat, and deep character progression with true digital ownership via blockchain. Players can mint, trade, and own in-game assets as NFTs on Solana, and participate in a player-driven economy.
 
-- **Frontend**: Next.js with App Router, TypeScript, Tailwind CSS
-- **Backend**: Next.js API Routes, Supabase
-- **Database**: Supabase Postgres
-- **Authentication**: Supabase Auth
+---
 
-## Getting Started
+## ✨ Features
 
-### Prerequisites
+- **Solana wallet integration** (Phantom, Solflare, etc.)
+- **NFT minting and trading** for weapons, armor, and accessories
+- **Marketplace** for in-game and on-chain assets
+- **SPL tokenomics** for premium currency and trading
+- **Phaser.js game engine** for dungeons and combat
+- **Modular, feature-based code structure** for easy scaling
+- **Supabase backend** for authentication, data, and storage
+- **Accessible, responsive UI** with TailwindCSS
 
-- Node.js 18.17 or later
-- npm or yarn
-- Supabase account
+---
 
-### Installation
+## 📁 Folder Structure
 
-1. Clone the repository:
+```
+/src
+  /app/
+    /api/                  # API route handlers (backend)
+    /(auth)/               # Auth pages (login, register)
+    /(game)/               # Main game pages (dashboard, dungeons, shop, etc.)
+    /marketplace/          # Marketplace UI
+    /solana/               # Solana wallet, NFT, token UI
+    /game/                 # Game engine entry (Phaser.js, etc.)
+  /components/
+    /auth/
+    /combat/
+    /dungeons/
+    /game/
+    /hunters/
+    /inventory/
+    /layout/
+    /marketplace/
+    /shop/
+    /skills/
+    /solana/
+    /ui/
+  /constants/
+  /hooks/
+  /lib/
+    /game/
+    /supabase/
+    /utils/
+  /providers/
+  /services/
+    /blockchain/
+    /marketplace/
+  /styles/
+  /types/
+  /assets/                 # Sprites, tilemaps, audio, images
+```
 
+---
+
+## 🏁 Getting Started
+
+1. **Clone the repo:**
    ```bash
-   git clone https://github.com/yourusername/solo-rpg.git
+   git clone https://github.com/your-username/solo-rpg.git
    cd solo-rpg
    ```
-
-2. Install dependencies:
-
+2. **Install dependencies:**
    ```bash
    npm install
+   # or
+   yarn install
    ```
-
-3. Copy the `.env.example` file to `.env.local` and fill in your Supabase credentials:
-
-   ```bash
-   cp .env.example .env.local
-   ```
-
-4. Start the development server:
-
+3. **Configure environment variables:**
+   - Copy `.env.example` to `.env.local` and fill in Supabase and Solana credentials.
+4. **Run the development server:**
    ```bash
    npm run dev
+   # or
+   yarn dev
    ```
+5. **Open [http://localhost:3000](http://localhost:3000)** to view the app.
 
-5. Open [http://localhost:3000](http://localhost:3000) in your browser to see the result.
+---
 
-## Project Structure
+## 🤝 Contributing
 
-- `/src/app`: Next.js App Router pages and API routes
-- `/src/components`: Reusable UI components
-- `/src/hooks`: Custom React hooks
-- `/src/lib`: Utilities and libraries
-- `/src/types`: TypeScript type definitions
-- `/src/constants`: Game constants and configurations
-- `/src/providers`: Context providers
-- `/src/services`: Service layer for data operations
-- `/src/styles`: Global styles and themes
+1. Fork the repository
+2. Create a new branch (`git checkout -b feature/your-feature`)
+3. Make your changes
+4. Commit and push (`git commit -m 'Add feature' && git push origin feature/your-feature`)
+5. Open a pull request describing your changes
 
-## License
+Please follow the code style and structure guidelines. For major changes, open an issue first to discuss your ideas.
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+---
+
+## 📚 Documentation
+
+- [Project Description](./PROJECT_DESCRIPTION_FINAL.md)
+- [Project Checklist](./PROJECT_CHECKLIST.md)
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License**. See [`LICENSE`](./LICENSE) for details.

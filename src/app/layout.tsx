@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "../styles/globals.css";
 import { Toaster } from "sonner";
+import { SolanaWalletContextProvider } from "@/solana/WalletProvider";
 
 export const metadata: Metadata = {
   title: "Solo Leveling RPG",
@@ -16,8 +17,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        {children}
-        <Toaster position="bottom-right" richColors />
+        <SolanaWalletContextProvider>
+          {children}
+          <Toaster position="bottom-right" richColors />
+        </SolanaWalletContextProvider>
       </body>
     </html>
   );
