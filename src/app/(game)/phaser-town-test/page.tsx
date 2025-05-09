@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef } from 'react';
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 
 // Define constants outside useEffect so they are accessible by the component's render return
 const TILE_SIZE_CONST = 32;
