@@ -104,7 +104,7 @@ Please follow the code style and structure guidelines. For major changes, open a
 ## 📚 Documentation
 
 - [Project Description](./PROJECT_DESCRIPTION_FINAL.md)
-- [Project Checklist](./PROJECT_CHECKLIST.md)
+- [Project Checklist](./docs/ProjectChecklist.mdProjectChecklist.md)
 
 ---
 
