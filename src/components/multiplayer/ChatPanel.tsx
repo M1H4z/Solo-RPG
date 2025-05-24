@@ -209,9 +209,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                 <div key={message.id} className="flex items-start gap-2 hover:bg-surface/30 p-1 rounded">
                   {/* Avatar/Icon */}
                   <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center">
-                    {message.sender_class && (
+                    {message.sender_class ? (
                       <div className="w-5 h-5">
                         {getClassIcon(message.sender_class)}
+                      </div>
+                    ) : (
+                      <div className="w-5 h-5 bg-gray-600 rounded-full flex items-center justify-center">
+                        <span className="text-xs text-white">?</span>
                       </div>
                     )}
                   </div>
@@ -223,7 +227,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         "font-medium text-sm",
                         getRankColor(message.sender_rank || '')
                       )}>
-                        {message.sender_name}
+                        {message.sender_name || 'Unknown Player'}
                       </span>
                       <span className="text-xs text-text-disabled">
                         {formatTime(message.created_at)}

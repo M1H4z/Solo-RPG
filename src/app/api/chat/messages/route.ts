@@ -85,10 +85,14 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { channel_id, content, message_type = 'text', reply_to_id } = body;
+    const { channel_id, content, message_type = 'text', reply_to_id, hunter_id } = body;
 
     if (!channel_id || !content?.trim()) {
       return NextResponse.json({ error: 'Channel ID and content are required' }, { status: 400 });
+    }
+
+    if (!hunter_id) {
+      return NextResponse.json({ error: 'Hunter ID is required' }, { status: 400 });
     }
 
     if (content.length > 1000) {
@@ -103,14 +107,17 @@ export async function POST(request: Request) {
 
     const supabase = createSupabaseRouteHandlerClient();
 
-    // Get user's current hunter
-    const { data: hunter } = await supabase
+    // Verify that the hunter belongs to the authenticated user
+    const { data: hunter, error: hunterError } = await supabase
       .from('hunters')
-      .select('id')
+      .select('id, user_id')
+      .eq('id', hunter_id)
       .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
       .single();
+
+    if (hunterError || !hunter) {
+      return NextResponse.json({ error: 'Invalid hunter or hunter does not belong to user' }, { status: 403 });
+    }
 
     // Insert the message
     const { data: message, error } = await supabase
@@ -118,7 +125,7 @@ export async function POST(request: Request) {
       .insert({
         channel_id,
         sender_id: user.id,
-        hunter_id: hunter?.id,
+        hunter_id: hunter.id,
         content: content.trim(),
         message_type,
         reply_to_id

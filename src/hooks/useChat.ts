@@ -124,6 +124,18 @@ export const useChat = (
         throw new Error(data.error || 'Failed to load messages');
       }
 
+      console.log('Loaded messages:', {
+        channelId,
+        messageCount: data.messages?.length || 0,
+        firstMessage: data.messages?.[0] ? {
+          id: data.messages[0].id,
+          content: data.messages[0].content,
+          sender_name: data.messages[0].sender_name,
+          sender_class: data.messages[0].sender_class,
+          sender_rank: data.messages[0].sender_rank
+        } : null
+      });
+
       setState(prev => ({
         ...prev,
         messages: {
@@ -167,13 +179,23 @@ export const useChat = (
           schema: 'public',
           table: 'chat_messages'
         }, (payload) => {
+          console.log('Real-time message received:', payload);
+          
           // Immediately refetch messages for the affected channel
           const newMessage = payload.new as any;
           
+          console.log('New message data:', {
+            channel_id: newMessage.channel_id,
+            sender_id: newMessage.sender_id,
+            hunter_id: newMessage.hunter_id,
+            content: newMessage.content
+          });
+          
           // Add a small delay to ensure the transaction is committed
           setTimeout(() => {
+            console.log('Refetching messages for channel:', newMessage.channel_id);
             loadMessages(newMessage.channel_id, 0);
-          }, 100);
+          }, 500);
         })
 
         .subscribe((status) => {
@@ -228,14 +250,15 @@ export const useChat = (
     messageType: MessageType = 'text', 
     replyToId?: string
   ) => {
-    if (!activeChannelId || !content.trim()) return;
+    if (!activeChannelId || !content.trim() || !currentHunter) return;
 
     try {
       const payload: SendMessagePayload = {
         channel_id: activeChannelId,
         content: content.trim(),
         message_type: messageType,
-        reply_to_id: replyToId
+        reply_to_id: replyToId,
+        hunter_id: currentHunter.id
       };
 
       const response = await fetch('/api/chat/messages', {
@@ -268,7 +291,7 @@ export const useChat = (
         error: error instanceof Error ? error.message : 'Failed to send message'
       }));
     }
-  }, [activeChannelId]);
+  }, [activeChannelId, currentHunter]);
 
   const editMessage = useCallback(async (messageId: string, content: string) => {
     // TODO: Implement edit functionality

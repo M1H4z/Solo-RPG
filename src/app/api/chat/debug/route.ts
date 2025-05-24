@@ -35,6 +35,7 @@ export async function GET(request: Request) {
     // Check messages in global channel
     const globalChannel = allChannels?.find(ch => ch.type === 'global');
     let globalMessages = [];
+    let globalMessagesWithJoin = [];
     if (globalChannel) {
       const { data: messages } = await supabase
         .from('chat_messages')
@@ -43,6 +44,23 @@ export async function GET(request: Request) {
         .order('created_at', { ascending: false })
         .limit(10);
       globalMessages = messages || [];
+
+      // Also get messages with joined data
+      const { data: messagesWithJoin } = await supabase
+        .from('chat_messages')
+        .select(`
+          *,
+          hunters:hunter_id (
+            name,
+            level,
+            class,
+            rank
+          )
+        `)
+        .eq('channel_id', globalChannel.id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      globalMessagesWithJoin = messagesWithJoin || [];
     }
 
     return NextResponse.json({
@@ -52,7 +70,15 @@ export async function GET(request: Request) {
       participations,
       globalChannel,
       globalMessages: globalMessages.length,
-      globalMessagesDetail: globalMessages
+      globalMessagesDetail: globalMessages,
+      globalMessagesWithJoin: globalMessagesWithJoin.map(msg => ({
+        id: msg.id,
+        content: msg.content,
+        hunter_id: msg.hunter_id,
+        sender_id: msg.sender_id,
+        hunters: msg.hunters,
+        created_at: msg.created_at
+      }))
     });
 
   } catch (error) {
