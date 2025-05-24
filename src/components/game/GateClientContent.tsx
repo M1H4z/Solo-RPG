@@ -14,6 +14,9 @@ import { Button } from "@/components/ui/Button";
 import { Database } from "@/lib/supabase/database.types";
 import { toast } from 'sonner';
 import { AlertTriangle } from 'lucide-react';
+import { usePlayerPresence } from "@/hooks/usePlayerPresence";
+import OnlinePlayersPanel from "@/components/multiplayer/OnlinePlayersPanel";
+import ChatPanel from "@/components/multiplayer/ChatPanel";
 
 // Type for the active gate data from the DB
 type ActiveGateInfo = Database['public']['Tables']['active_gates']['Row'];
@@ -230,8 +233,7 @@ function GateContent({ hunterId }: GateContentProps) {
                       );
                    })()}
 
-                   <div className="mt-6 w-full max-w-md space-y-4">
-                     <Card className="border-primary/60 bg-surface/80 backdrop-blur-sm">
+                   <Card className="border-primary/60 bg-surface/80 backdrop-blur-sm">
                          <CardHeader className="pb-2 pt-3">
                              <CardTitle className="text-base sm:text-lg">
                                  {activeGate.gate_type}
@@ -254,8 +256,12 @@ function GateContent({ hunterId }: GateContentProps) {
                            Abandon Gate
                          </Button>
                        </div>
+
+                       {/* Online Players Panel for Gate Hub */}
+                       <div className="mt-8 w-full max-w-md">
+                         <GatePlayersPresenceSection hunter={hunter} />
+                       </div>
                    </div>
-              </div>
           ) : (
               <div className="w-full max-w-lg space-y-6">
                   <h3 className="text-2xl font-semibold text-text-secondary sm:text-3xl">
@@ -270,8 +276,44 @@ function GateContent({ hunterId }: GateContentProps) {
                   <p className="pt-2 text-xs text-text-secondary">
                       Locating a gate might consume resources and entering has a time limit.
                   </p>
+
+                  {/* Online Players Panel for No Gate state */}
+                  <div className="mt-8">
+                    <GatePlayersPresenceSection hunter={hunter} />
+                  </div>
               </div>
           )}
+    </div>
+  );
+}
+
+// New component to handle presence logic for Gate
+function GatePlayersPresenceSection({ hunter }: { hunter: Hunter | null }) {
+  const { onlinePlayers, isConnected, error } = usePlayerPresence(hunter, 'gate');
+
+  if (!hunter) return null;
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl mx-auto mt-6">
+      <OnlinePlayersPanel 
+        players={onlinePlayers}
+        isConnected={isConnected}
+        location="gate"
+        error={error}
+      />
+      
+      <ChatPanel
+        currentHunter={{
+          id: hunter.id,
+          userId: hunter.userId,
+          name: hunter.name,
+          level: hunter.level,
+          class: hunter.class,
+          rank: hunter.rank,
+        }}
+        location="gate"
+        defaultChannel="location"
+      />
     </div>
   );
 }

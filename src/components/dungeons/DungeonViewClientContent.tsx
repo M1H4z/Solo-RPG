@@ -14,6 +14,9 @@ import { calculateDerivedStats } from '@/lib/game/stats'; // Import our main sta
 import { LootResult } from '@/constants/lootTables.constants'; // Import LootResult type
 import { HunterClass } from "@/constants/classes"; // Import HunterClass
 import { EnemyType } from "@/types/enemy.types"; // Import EnemyType
+import { usePlayerPresence } from "@/hooks/usePlayerPresence";
+import OnlinePlayersPanel from "@/components/multiplayer/OnlinePlayersPanel";
+import ChatPanel from "@/components/multiplayer/ChatPanel";
 
 // Match interface structure from CombatInterface
 interface EnemyCombatEntity {
@@ -587,6 +590,11 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
     // --- JSX Return --- 
     return (
         <div className="relative w-full"> {/* Added relative for positioning controls */} 
+            {/* Online Players Panel - Fixed position on left side */}
+            {fullHunterData && (
+                <DungeonPlayersPresenceSection hunter={fullHunterData} />
+            )}
+
             {/* Loading State */}
             {roomStatus === 'loading' && (
                  <div className="flex h-[50vh] w-full items-center justify-center">
@@ -701,4 +709,45 @@ export default function DungeonViewClientContent({ gateId, hunterId }: DungeonVi
                          )}
                      </div>
     );
+}
+
+// New component to handle presence logic for Dungeon
+function DungeonPlayersPresenceSection({ hunter }: { hunter: Hunter }) {
+  const { onlinePlayers, isConnected, error } = usePlayerPresence(hunter, 'dungeon');
+  const [isChatMinimized, setIsChatMinimized] = useState(true);
+
+  return (
+    <>
+      {/* Online Players Panel - Fixed position on left side */}
+      <div className="fixed left-4 top-1/2 transform -translate-y-1/2 z-30 hidden lg:block">
+        <OnlinePlayersPanel 
+          players={onlinePlayers}
+          isConnected={isConnected}
+          location="dungeon"
+          className="w-72"
+          error={error}
+        />
+      </div>
+
+      {/* Floating Chat Panel - Bottom right, can be minimized */}
+      <div className="fixed bottom-20 right-4 z-40">
+        <ChatPanel
+          currentHunter={{
+            id: hunter.id,
+            userId: hunter.userId,
+            name: hunter.name,
+            level: hunter.level,
+            class: hunter.class,
+            rank: hunter.rank,
+          }}
+          location="dungeon"
+          defaultChannel="location"
+          isMinimized={isChatMinimized}
+          onMinimize={() => setIsChatMinimized(!isChatMinimized)}
+          showChannelList={false}
+          className={isChatMinimized ? "" : "w-80 h-96"}
+        />
+      </div>
+    </>
+  );
 } 

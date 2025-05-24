@@ -1,4 +1,4 @@
-import { ClassType } from "@/constants/classes.constants";
+import { HunterClass, HUNTER_CLASSES } from "@/constants/classes";
 import { EquipmentSlots, InventoryItem } from "./item.types"; // Import new types
 import { StaticImageData } from "next/image";
 import { ClassInfo } from "./class.types"; // Assuming ClassInfo is defined here
@@ -29,7 +29,7 @@ export interface Hunter {
   name: string;
   level: number;
   rank: string; // e.g., 'E', 'D', 'S'
-  class: ClassType;
+  class: HunterClass;
   experience: number;
   currentLevelStartExp: number; // Exp needed for the current level's start
   expNeededForNextLevel: number; // Exp needed to reach the next level from the start of current level
@@ -70,7 +70,7 @@ export interface Hunter {
 // Interface for Hunter creation payload (example)
 export interface CreateHunterPayload {
   name: string;
-  classType: keyof typeof ClassInfo; // Use keys from ClassInfo
+  classType: keyof typeof HUNTER_CLASSES; // Use keys from HUNTER_CLASSES
   // userId will likely be injected server-side from session
 }
 

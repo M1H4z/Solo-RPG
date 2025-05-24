@@ -1,0 +1,175 @@
+import { NextResponse } from 'next/server';
+import { createSupabaseRouteHandlerClient } from '@/lib/supabase/server';
+import { getAuthenticatedUser } from '@/services/authService';
+import { Database } from '@/lib/supabase/database.types';
+
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const channelId = searchParams.get('channelId');
+    const limit = parseInt(searchParams.get('limit') || '50');
+    const offset = parseInt(searchParams.get('offset') || '0');
+
+    if (!channelId) {
+      return NextResponse.json({ error: 'Channel ID is required' }, { status: 400 });
+    }
+
+    // Use the correct authentication method
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const supabase = createSupabaseRouteHandlerClient();
+
+    // Fetch messages with sender information
+    const { data: messages, error } = await supabase
+      .from('chat_messages')
+      .select(`
+        *,
+        hunters:hunter_id (
+          name,
+          level,
+          class,
+          rank
+        ),
+        reply_to:reply_to_id (
+          id,
+          content,
+          sender_id,
+          hunters:hunter_id (
+            name,
+            level,
+            class,
+            rank
+          )
+        )
+      `)
+      .eq('channel_id', channelId)
+      .eq('is_deleted', false)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) {
+      console.error('Error fetching messages:', error);
+      return NextResponse.json({ error: 'Failed to fetch messages' }, { status: 500 });
+    }
+
+    // Transform the data to match our ChatMessage type
+    const transformedMessages = messages?.map(msg => ({
+      ...msg,
+      sender_name: msg.hunters?.name,
+      sender_level: msg.hunters?.level,
+      sender_class: msg.hunters?.class,
+      sender_rank: msg.hunters?.rank,
+      reply_to: msg.reply_to ? {
+        ...msg.reply_to,
+        sender_name: msg.reply_to.hunters?.name,
+        sender_level: msg.reply_to.hunters?.level,
+        sender_class: msg.reply_to.hunters?.class,
+        sender_rank: msg.reply_to.hunters?.rank,
+      } : undefined
+    })) || [];
+
+    return NextResponse.json({ 
+      messages: transformedMessages.reverse(), // Return in chronological order
+      hasMore: messages?.length === limit 
+    });
+
+  } catch (error) {
+    console.error('Error in chat messages GET:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { channel_id, content, message_type = 'text', reply_to_id } = body;
+
+    if (!channel_id || !content?.trim()) {
+      return NextResponse.json({ error: 'Channel ID and content are required' }, { status: 400 });
+    }
+
+    if (content.length > 1000) {
+      return NextResponse.json({ error: 'Message too long (max 1000 characters)' }, { status: 400 });
+    }
+
+    // Use the correct authentication method
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const supabase = createSupabaseRouteHandlerClient();
+
+    // Get user's current hunter
+    const { data: hunter } = await supabase
+      .from('hunters')
+      .select('id')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    // Insert the message
+    const { data: message, error } = await supabase
+      .from('chat_messages')
+      .insert({
+        channel_id,
+        sender_id: user.id,
+        hunter_id: hunter?.id,
+        content: content.trim(),
+        message_type,
+        reply_to_id
+      })
+      .select(`
+        *,
+        hunters:hunter_id (
+          name,
+          level,
+          class,
+          rank
+        ),
+        reply_to:reply_to_id (
+          id,
+          content,
+          sender_id,
+          hunters:hunter_id (
+            name,
+            level,
+            class,
+            rank
+          )
+        )
+      `)
+      .single();
+
+    if (error) {
+      console.error('Error sending message:', error);
+      return NextResponse.json({ error: 'Failed to send message' }, { status: 500 });
+    }
+
+    // Transform the data
+    const transformedMessage = {
+      ...message,
+      sender_name: message.hunters?.name,
+      sender_level: message.hunters?.level,
+      sender_class: message.hunters?.class,
+      sender_rank: message.hunters?.rank,
+      reply_to: message.reply_to ? {
+        ...message.reply_to,
+        sender_name: message.reply_to.hunters?.name,
+        sender_level: message.reply_to.hunters?.level,
+        sender_class: message.reply_to.hunters?.class,
+        sender_rank: message.reply_to.hunters?.rank,
+      } : undefined
+    };
+
+    return NextResponse.json({ message: transformedMessage });
+
+  } catch (error) {
+    console.error('Error in chat messages POST:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+} 

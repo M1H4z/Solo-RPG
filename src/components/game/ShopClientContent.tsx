@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import RealTimeClock from "@/components/ui/RealTimeClock";
+import { usePlayerPresence } from "@/hooks/usePlayerPresence";
+import OnlinePlayersPanel from "@/components/multiplayer/OnlinePlayersPanel";
 
 // Placeholder components
 // const ShopItemCard = ({ item }) => { ... };
@@ -160,6 +162,30 @@ function ShopContent() {
           </span>
         </CardFooter>
       </Card>
+
+      {/* Online Players Panel - Added below existing content */}
+      <div className="mt-6 sm:mt-8">
+        <ShopPlayersPresenceSection hunter={hunter} />
+      </div>
+    </div>
+  );
+}
+
+// New component to handle presence logic for Shop
+function ShopPlayersPresenceSection({ hunter }: { hunter: Hunter | null }) {
+  const { onlinePlayers, isConnected, error } = usePlayerPresence(hunter, 'shop');
+
+  if (!hunter) return null;
+
+  return (
+    <div className="flex justify-center">
+      <OnlinePlayersPanel 
+        players={onlinePlayers}
+        isConnected={isConnected}
+        location="shop"
+        className="w-full max-w-md"
+        error={error}
+      />
     </div>
   );
 }

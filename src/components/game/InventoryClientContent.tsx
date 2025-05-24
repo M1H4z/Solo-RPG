@@ -76,6 +76,8 @@ import {
   DragStartEvent,
 } from "@dnd-kit/core";
 import RealTimeClock from "@/components/ui/RealTimeClock";
+import { usePlayerPresence } from "@/hooks/usePlayerPresence";
+import OnlinePlayersPanel from "@/components/multiplayer/OnlinePlayersPanel";
 
 // Define possible item types for filtering (including 'All')
 const itemTypesForFilter: ("All" | ItemType)[] = [
@@ -135,6 +137,7 @@ function InventoryContent() {
 
   const [inventory, setInventory] = useState < InventoryItem[] > ([]);
   const [equipment, setEquipment] = useState < EquipmentSlots > ({});
+  const [hunter, setHunter] = useState<Hunter | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState < string | null > (null);
   const [actionLoading, setActionLoading] = useState < Record < string, boolean >> (
@@ -173,6 +176,7 @@ function InventoryContent() {
     try {
       const fetchedHunter = await fetchHunterWithInventoryData(hunterId);
       if (fetchedHunter) {
+        setHunter(fetchedHunter);
         setInventory(fetchedHunter.inventory || []); // Extract inventory
         setEquipment(fetchedHunter.equipment || {}); // Extract equipment
       } else {
@@ -180,6 +184,7 @@ function InventoryContent() {
       }
     } catch (err: any) {
       setError(err.message || "Failed to load inventory.");
+      setHunter(null);
       setInventory([]);
       setEquipment({});
     } finally {
@@ -1024,6 +1029,11 @@ function InventoryContent() {
             </div>
         </div>
 
+        {/* Online Players Panel - Added below existing content */}
+        <div className="mt-6 sm:mt-8">
+          <InventoryPlayersPresenceSection hunter={hunter} />
+        </div>
+
         <DragOverlay dropAnimation={null}>
             {activeDragItem ? (
                 <InventoryIconSlot
@@ -1036,6 +1046,25 @@ function InventoryContent() {
         </DragOverlay>
       </TooltipProvider>
     </DndContext>
+  );
+}
+
+// New component to handle presence logic for Inventory
+function InventoryPlayersPresenceSection({ hunter }: { hunter: Hunter | null }) {
+  const { onlinePlayers, isConnected, error } = usePlayerPresence(hunter, 'inventory');
+
+  if (!hunter) return null;
+
+  return (
+    <div className="flex justify-center">
+      <OnlinePlayersPanel 
+        players={onlinePlayers}
+        isConnected={isConnected}
+        location="inventory"
+        className="w-full max-w-md"
+        error={error}
+      />
+    </div>
   );
 }
 

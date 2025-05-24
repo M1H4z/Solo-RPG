@@ -19,8 +19,11 @@ import { calculateDerivedStats } from "@/lib/game/stats"; // Updated Import Path
 import { Separator } from "@/components/ui/Separator"; // Import Separator
 import RealTimeClock from "@/components/ui/RealTimeClock"; // Removed .tsx
 import { HUNTER_CLASSES } from "@/constants/classes";
-import { Coins, Gem } from "lucide-react"; // Import currency icons
+import { Coins, Gem, Settings, Clock } from "lucide-react"; // Import currency icons
 import { WalletConnectButton } from "@/components/solana/WalletConnectButton";
+import ChatPanel from "@/components/multiplayer/ChatPanel";
+import { StatsRadarChart } from '@/components/hunters/StatsRadarChart';
+import { cn } from '@/lib/utils';
 
 // Define rank requirements (could be moved to constants later)
 const RANK_UP_REQUIREMENTS = {
@@ -44,6 +47,7 @@ function DashboardContent() {
     const [expLoading, setExpLoading] = useState(false);
     const [allocationError, setAllocationError] = useState<string | null>(null);
     const [expToAdd, setExpToAdd] = useState<number>(100);
+    const [isChatMinimized, setIsChatMinimized] = useState(false);
 
     // Refetch function
     const fetchHunterData = useCallback(async () => { // Wrap in useCallback
@@ -245,7 +249,7 @@ function DashboardContent() {
     return (
       <>
         <Toaster position="bottom-right" richColors />
-      <div className="container mx-auto px-4 py-8 sm:py-12">
+      <div className="container mx-auto px-4 py-8 sm:py-12 pb-24">
         {/* Make Header Card sticky */}
         <Card className="mb-6 sm:mb-8 sticky top-0 z-50">
             {/* Responsive Header (keep inner styles) */}
@@ -377,6 +381,27 @@ function DashboardContent() {
           </Card>
         </div>
       </div>
+
+      {/* Sticky Chat Panel - Always visible and positioned in bottom-left */}
+      {hunter && (
+        <div className="fixed bottom-4 left-4 z-40">
+          <ChatPanel
+            currentHunter={{
+              id: hunter.id,
+              userId: hunter.userId,
+              name: hunter.name,
+              level: hunter.level,
+              class: hunter.class,
+              rank: hunter.rank,
+            }}
+            location="dashboard"
+            defaultChannel="global"
+            isMinimized={isChatMinimized}
+            onMinimize={() => setIsChatMinimized(!isChatMinimized)}
+            className={isChatMinimized ? '' : 'w-96 h-64'}
+          />
+        </div>
+      )}
       </>
     );
 }

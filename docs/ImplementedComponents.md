@@ -17,16 +17,16 @@ This document lists all the React components implemented in the Solo RPG project
 
 ## Dungeons Components (`src/components/dungeons/`)
 
-- `DungeonViewClientContent.tsx`: Manages the view and interactions within a dungeon room, including grid movement and event triggering.
+- `DungeonViewClientContent.tsx`: Manages the view and interactions within a dungeon room, including grid movement and event triggering. Now includes real-time player presence display.
 
 ## Game Components (`src/components/game/`)
 
 - `CurrencyHistoryChart.tsx`: Displays a chart for currency history (likely for gold/diamonds).
-- `DashboardClientContent.tsx`: Main dashboard UI, displaying hunter stats, navigation, etc.
-- `GateClientContent.tsx`: UI for the Gate Hub, allowing players to find and enter gates.
-- `InventoryClientContent.tsx`: Manages the player's inventory, item display, and equipment.
+- `DashboardClientContent.tsx`: Main dashboard UI, displaying hunter stats, navigation, etc. Now includes real-time player presence panel.
+- `GateClientContent.tsx`: UI for the Gate Hub, allowing players to find and enter gates. Now includes real-time player presence panel.
+- `InventoryClientContent.tsx`: Manages the player's inventory, item display, and equipment. Now includes real-time player presence panel.
 - `ProfileClientContent.tsx`: Displays detailed hunter profile information (potentially a more detailed view than the dashboard).
-- `ShopClientContent.tsx`: UI for the in-game item shop. (Note: also listed under `src/components/shop/`)
+- `ShopClientContent.tsx`: UI for the in-game item shop. Now includes real-time player presence panel. (Note: also listed under `src/components/shop/`)
 - `SkillsClientContent.tsx`: UI for viewing, unlocking, and equipping skills.
 - `StatsDisplay.tsx`: A component to display hunter statistics.
 
@@ -48,9 +48,13 @@ This document lists all the React components implemented in the Solo RPG project
 
 - _(Currently empty, contains only `.gitkeep`)_
 
+## Multiplayer Components (`src/components/multiplayer/`)
+
+- `OnlinePlayersPanel.tsx`: Displays real-time list of online players with their hunter information (name, level, class, rank). Includes functionality for expanding/collapsing player list, connection status indicator, and error handling. Integrated into Dashboard, Gate, Inventory, Shop, and Dungeon pages.
+
 ## Shop Components (`src/components/shop/`)
 
-- `ShopClientContent.tsx`: UI for the in-game item shop. (Note: also listed under `src/components/game/`)
+- `ShopClientContent.tsx`: UI for the in-game item shop. Now includes real-time player presence panel. (Note: also listed under `src/components/game/`)
 
 ## Skills Components (`src/components/skills/`)
 
@@ -74,3 +78,21 @@ This document lists all the React components implemented in the Solo RPG project
 - `Separator.tsx`: Visual separator line.
 - `skeleton.tsx`: Skeleton loader component.
 - `tooltip.tsx`: Tooltip component.
+
+## Hooks (`src/hooks/`)
+
+- `usePlayerPresence.ts`: Custom hook for managing real-time player presence using Supabase Realtime. Handles connection management, presence tracking, error handling, and cleanup. Provides online player list, connection status, and player count.
+
+## Profile Page (`/profile`)
+
+- **Profile Page (`/profile`)**: Central hub for hunter management. Displays hunter details, stat allocation, currency, transaction history, and provides full skill management (unlock, equip, unequip, filter, and view all skills). All skill-related actions are performed here; there is no separate `/skills` page.
+
+## Skills System
+
+- **Skills System**: All skill management (unlocking, equipping, unequipping, filtering, and viewing) is integrated into the Profile page. There is no separate skills page or route; all skill actions are accessible from the hunter's profile.
+
+## Real-Time Multiplayer Features
+
+- **Player Presence System**: Real-time tracking of online players across all game locations (Dashboard, Gate, Inventory, Shop, Dungeons). Shows player count, hunter details (name, level, class, rank), and connection status. Automatically updates when players join/leave or change locations.
+- **Location-Based Presence**: Players are tracked by their current location in the game, allowing for location-specific player lists.
+- **Connection Management**: Robust error handling and reconnection logic for real-time features.
