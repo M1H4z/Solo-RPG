@@ -227,7 +227,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         "font-medium text-sm",
                         getRankColor(message.sender_rank || '')
                       )}>
-                        {message.sender_name || 'Unknown Player'}
+                        {message.sender_name || message.hunters?.name || 'Unknown Player'}
                       </span>
                       <span className="text-xs text-text-disabled">
                         {formatTime(message.created_at)}

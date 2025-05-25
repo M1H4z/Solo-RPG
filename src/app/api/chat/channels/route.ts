@@ -16,8 +16,9 @@ export async function GET(request: Request) {
 
     const supabase = createSupabaseRouteHandlerClient();
 
-    // Get channels user has access to (participants only for non-global channels)
-    const { data: userChannels, error: userChannelsError } = await supabase
+    // Get all channels the user has access to
+    // First get global channels (everyone has access)
+    const { data: globalChannels, error: globalError } = await supabase
       .from('chat_channels')
       .select(`
         *,
@@ -27,17 +28,6 @@ export async function GET(request: Request) {
           last_read_at
         )
       `)
-      .eq('is_active', true)
-      .or(`type.eq.global,chat_participants.user_id.eq.${user.id}`);
-
-    if (userChannelsError) {
-      console.error('Error fetching user channels:', userChannelsError);
-    }
-
-    // Ensure we have at least the global channel
-    const { data: globalChannels, error: globalError } = await supabase
-      .from('chat_channels')
-      .select('*')
       .eq('type', 'global')
       .eq('is_active', true);
 
@@ -45,16 +35,27 @@ export async function GET(request: Request) {
       console.error('Error fetching global channels:', globalError);
     }
 
-    // Combine channels, ensuring global channels are always included
-    const allChannels = [...(globalChannels || [])];
-    
-    if (userChannels) {
-      userChannels.forEach(channel => {
-        if (!allChannels.find(ch => ch.id === channel.id)) {
-          allChannels.push(channel);
-        }
-      });
+    // Then get channels where user is a participant
+    const { data: participantChannels, error: participantError } = await supabase
+      .from('chat_channels')
+      .select(`
+        *,
+        chat_participants!inner (
+          user_id,
+          is_muted,
+          last_read_at
+        )
+      `)
+      .eq('is_active', true)
+      .eq('chat_participants.user_id', user.id)
+      .neq('type', 'global');
+
+    if (participantError) {
+      console.error('Error fetching participant channels:', participantError);
     }
+
+    // Combine all channels
+    const allChannels = [...(globalChannels || []), ...(participantChannels || [])];
 
     // Get unread message counts for each channel
     const channelIds = allChannels.map(ch => ch.id);

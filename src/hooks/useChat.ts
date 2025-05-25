@@ -124,17 +124,7 @@ export const useChat = (
         throw new Error(data.error || 'Failed to load messages');
       }
 
-      console.log('Loaded messages:', {
-        channelId,
-        messageCount: data.messages?.length || 0,
-        firstMessage: data.messages?.[0] ? {
-          id: data.messages[0].id,
-          content: data.messages[0].content,
-          sender_name: data.messages[0].sender_name,
-          sender_class: data.messages[0].sender_class,
-          sender_rank: data.messages[0].sender_rank
-        } : null
-      });
+
 
       setState(prev => ({
         ...prev,
@@ -195,7 +185,7 @@ export const useChat = (
           setTimeout(() => {
             console.log('Refetching messages for channel:', newMessage.channel_id);
             loadMessages(newMessage.channel_id, 0);
-          }, 500);
+          }, 100);
         })
 
         .subscribe((status) => {
