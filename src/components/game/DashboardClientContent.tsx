@@ -384,7 +384,7 @@ function DashboardContent() {
 
       {/* Sticky Chat Panel - Always visible and positioned in bottom-left */}
       {hunter && (
-        <div className="fixed bottom-4 left-4 z-40">
+        <div className="fixed bottom-2 left-2 right-2 sm:bottom-4 sm:left-4 sm:right-auto z-40">
           <ChatPanel
             currentHunter={{
               id: hunter.id,
@@ -398,7 +398,7 @@ function DashboardContent() {
             defaultChannel="global"
             isMinimized={isChatMinimized}
             onMinimize={() => setIsChatMinimized(!isChatMinimized)}
-            className={isChatMinimized ? '' : 'w-96 h-64'}
+            className={isChatMinimized ? '' : 'w-full sm:w-96 h-56 sm:h-64'}
           />
         </div>
       )}
