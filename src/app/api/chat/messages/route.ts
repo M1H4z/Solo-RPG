@@ -61,14 +61,13 @@ export async function GET(request: Request) {
 
 
 
+
     // For messages without hunter data, fetch it manually
     const messagesWithMissingHunters = messages?.filter(msg => 
       (!msg.hunters || !msg.hunters.name) && msg.sender_id
     ) || [];
 
-
-
-    // Get missing hunter data
+    // Get missing hunter data (fallback for any edge cases)
     let hunterLookup: Record<string, any> = {};
     if (messagesWithMissingHunters.length > 0) {
       const senderIds = [...new Set(messagesWithMissingHunters.map(msg => msg.sender_id))];
@@ -110,8 +109,6 @@ export async function GET(request: Request) {
         } : undefined
       };
     }) || [];
-
-
 
 
 
