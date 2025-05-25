@@ -40,6 +40,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [showChannels, setShowChannels] = useState(showChannelList);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const {
     channels,
@@ -55,10 +56,31 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 
   const { onlinePlayers } = usePlayerPresence(currentHunter, location);
 
+  // Force scroll to bottom function
+  const forceScrollToBottom = () => {
+    if (messagesContainerRef.current) {
+      const container = messagesContainerRef.current;
+      container.scrollTop = container.scrollHeight;
+    }
+  };
+
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    forceScrollToBottom();
   }, [messages]);
+
+  // Scroll to bottom when chat is maximized
+  useEffect(() => {
+    if (!isMinimized && messages.length > 0) {
+      // Force scroll with multiple attempts
+      const scrollAttempts = [0, 100, 300, 500];
+      scrollAttempts.forEach(delay => {
+        setTimeout(() => {
+          forceScrollToBottom();
+        }, delay);
+      });
+    }
+  }, [isMinimized, messages.length]);
 
   // Auto-select default channel
   useEffect(() => {
@@ -195,7 +217,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 
       {/* Messages Area */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        <div className="h-full overflow-y-auto scrollbar-thin">
+        <div ref={messagesContainerRef} className="h-full overflow-y-auto scrollbar-thin">
           {isLoading ? (
             <div className="flex items-center justify-center h-full text-text-secondary">
               Loading messages...
@@ -258,6 +280,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
             className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 bg-background border border-border/50 rounded text-xs sm:text-sm focus:outline-none focus:border-accent"
             maxLength={1000}
             disabled={!isConnected || !activeChannel}
+            autoComplete="new-password"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            data-form-type="other"
+            data-lpignore="true"
+            autoFocus={false}
           />
           <button
             onClick={handleSendMessage}

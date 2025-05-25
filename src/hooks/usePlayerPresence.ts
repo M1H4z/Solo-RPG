@@ -26,7 +26,14 @@ interface PresenceState {
   userId: string;
 }
 
-export const usePlayerPresence = (currentHunter: Hunter | null, location: string = 'hub') => {
+export const usePlayerPresence = (currentHunter: {
+  id: string;
+  userId: string;
+  name: string;
+  level: number;
+  class: string;
+  rank: string;
+} | null, location: string = 'hub') => {
   const [onlinePlayers, setOnlinePlayers] = useState<OnlinePlayer[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);

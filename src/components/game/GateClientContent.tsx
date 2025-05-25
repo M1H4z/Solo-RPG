@@ -12,10 +12,8 @@ import {
 } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Database } from "@/lib/supabase/database.types";
-import { toast } from 'sonner';
+import { toast, Toaster } from 'sonner';
 import { AlertTriangle } from 'lucide-react';
-import { usePlayerPresence } from "@/hooks/usePlayerPresence";
-import OnlinePlayersPanel from "@/components/multiplayer/OnlinePlayersPanel";
 import ChatPanel from "@/components/multiplayer/ChatPanel";
 
 // Type for the active gate data from the DB
@@ -48,6 +46,7 @@ function GateContent({ hunterId }: GateContentProps) {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isChatMinimized, setIsChatMinimized] = useState(false);
 
   // Fetch hunter data and active gate status
   const loadGateStatus = useCallback(async () => {
@@ -217,106 +216,91 @@ function GateContent({ hunterId }: GateContentProps) {
   }
 
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center text-center">
-        {activeGate ? (
-            <div className="flex h-full w-full flex-col items-center justify-around">
-                 {(() => {
-                    const colors = getRankColorClasses(activeGate.gate_rank);
-                    return (
-                        <div className="relative flex h-48 w-48 items-center justify-center sm:h-64 sm:w-64">
-                            <div className={`absolute h-full w-full animate-pulse rounded-full ${colors.bg} blur-xl`}></div>
-                            <div className={`absolute h-3/4 w-3/4 animate-spin rounded-full border-t-4 border-l-4 ${colors.border} opacity-75 [animation-duration:3s]`}></div>
-                            <div className={`absolute h-1/2 w-1/2 rounded-full bg-white/80 ${colors.bg} opacity-50 blur-lg`}></div>
-                            <div className="absolute h-1/4 w-1/4 rounded-full bg-blue-100 blur-sm"></div>
-                             <p className={`z-10 text-xs font-semibold ${colors.text}`}>Rank {activeGate.gate_rank} Gate</p>
-                        </div>
-                      );
-                   })()}
+    <>
+      <Toaster position="bottom-right" richColors />
+      <div className="flex h-full w-full flex-col items-center justify-center text-center">
+          {activeGate ? (
+              <div className="flex h-full w-full flex-col items-center justify-around">
+                   {(() => {
+                      const colors = getRankColorClasses(activeGate.gate_rank);
+                      return (
+                          <div className="relative flex h-48 w-48 items-center justify-center sm:h-64 sm:w-64">
+                              <div className={`absolute h-full w-full animate-pulse rounded-full ${colors.bg} blur-xl`}></div>
+                              <div className={`absolute h-3/4 w-3/4 animate-spin rounded-full border-t-4 border-l-4 ${colors.border} opacity-75 [animation-duration:3s]`}></div>
+                              <div className={`absolute h-1/2 w-1/2 rounded-full bg-white/80 ${colors.bg} opacity-50 blur-lg`}></div>
+                              <div className="absolute h-1/4 w-1/4 rounded-full bg-blue-100 blur-sm"></div>
+                               <p className={`z-10 text-xs font-semibold ${colors.text}`}>Rank {activeGate.gate_rank} Gate</p>
+                          </div>
+                        );
+                     })()}
 
-                   <Card className="border-primary/60 bg-surface/80 backdrop-blur-sm">
-                         <CardHeader className="pb-2 pt-3">
-                             <CardTitle className="text-base sm:text-lg">
-                                 {activeGate.gate_type}
-                              </CardTitle>
-                              <CardDescription className="text-xs sm:text-sm">
-                                 Depth {activeGate.current_depth}/{activeGate.total_depth} | Room {activeGate.current_room}/{activeGate.rooms_per_depth[activeGate.current_depth - 1]}
-                             </CardDescription>
-                         </CardHeader>
-                          <CardContent className="pb-3">
-                              <p className="text-xs text-accent sm:text-sm">
-                                  Expires: {new Date(activeGate.expires_at).toLocaleString()}
-                              </p>
-                         </CardContent>
-                       </Card>
-                       <div className="flex flex-col justify-center gap-4 pt-2 sm:flex-row">
-                         <Button onClick={() => handleEnterGate(activeGate.id)} disabled={actionLoading}>
-                           Enter Gate
-                         </Button>
-                         <Button size="lg" variant="destructive" onClick={() => handleAbandonGate(activeGate.id)} disabled={actionLoading}>
-                           Abandon Gate
-                         </Button>
-                       </div>
+                     <Card className="border-primary/60 bg-surface/80 backdrop-blur-sm">
+                           <CardHeader className="pb-2 pt-3">
+                               <CardTitle className="text-base sm:text-lg">
+                                   {activeGate.gate_type}
+                                </CardTitle>
+                                <CardDescription className="text-xs sm:text-sm">
+                                   Depth {activeGate.current_depth}/{activeGate.total_depth} | Room {activeGate.current_room}/{activeGate.rooms_per_depth[activeGate.current_depth - 1]}
+                               </CardDescription>
+                           </CardHeader>
+                            <CardContent className="pb-3">
+                                <p className="text-xs text-accent sm:text-sm">
+                                    Expires: {new Date(activeGate.expires_at).toLocaleString()}
+                                </p>
+                           </CardContent>
+                         </Card>
+                         <div className="flex flex-col justify-center gap-4 pt-2 sm:flex-row">
+                           <Button onClick={() => handleEnterGate(activeGate.id)} disabled={actionLoading}>
+                             Enter Gate
+                           </Button>
+                           <Button size="lg" variant="destructive" onClick={() => handleAbandonGate(activeGate.id)} disabled={actionLoading}>
+                             Abandon Gate
+                           </Button>
+                         </div>
+                     </div>
+            ) : (
+                <div className="w-full max-w-lg space-y-6">
+                    <h3 className="text-2xl font-semibold text-text-secondary sm:text-3xl">
+                        No Active Gate
+                    </h3>
+                    <p className="text-base text-text-secondary">
+                        {hunter ? `Ready to locate a Rank ${hunter.rank} gate?` : "Loading hunter details..."}
+                    </p>
+                    <Button size="lg" onClick={handleLocateNewGate} disabled={actionLoading}>
+                        {actionLoading ? 'Locating...' : 'Locate New Gate'}
+                    </Button>
+                    <p className="pt-2 text-xs text-text-secondary">
+                        Locating a gate might consume resources and entering has a time limit.
+                    </p>
+                </div>
+            )}
+      </div>
 
-                       {/* Online Players Panel for Gate Hub */}
-                       <div className="mt-8 w-full max-w-md">
-                         <GatePlayersPresenceSection hunter={hunter} />
-                       </div>
-                   </div>
-          ) : (
-              <div className="w-full max-w-lg space-y-6">
-                  <h3 className="text-2xl font-semibold text-text-secondary sm:text-3xl">
-                      No Active Gate
-                  </h3>
-                  <p className="text-base text-text-secondary">
-                      {hunter ? `Ready to locate a Rank ${hunter.rank} gate?` : "Loading hunter details..."}
-                  </p>
-                  <Button size="lg" onClick={handleLocateNewGate} disabled={actionLoading}>
-                      {actionLoading ? 'Locating...' : 'Locate New Gate'}
-                  </Button>
-                  <p className="pt-2 text-xs text-text-secondary">
-                      Locating a gate might consume resources and entering has a time limit.
-                  </p>
-
-                  {/* Online Players Panel for No Gate state */}
-                  <div className="mt-8">
-                    <GatePlayersPresenceSection hunter={hunter} />
-                  </div>
-              </div>
-          )}
-    </div>
+      {/* Fixed positioned Chat Panel - positioned in bottom-left (same as dashboard) */}
+      {hunter && (
+        <div className="fixed bottom-4 left-4 z-40">
+          <ChatPanel
+            currentHunter={{
+              id: hunter.id,
+              userId: hunter.userId,
+              name: hunter.name,
+              level: hunter.level,
+              class: hunter.class,
+              rank: hunter.rank,
+            }}
+            location="gate"
+            defaultChannel="location"
+            isMinimized={isChatMinimized}
+            onMinimize={() => setIsChatMinimized(!isChatMinimized)}
+            className={isChatMinimized ? '' : 'w-96 h-64'}
+          />
+        </div>
+      )}
+    </>
   );
 }
 
-// New component to handle presence logic for Gate
-function GatePlayersPresenceSection({ hunter }: { hunter: Hunter | null }) {
-  const { onlinePlayers, isConnected, error } = usePlayerPresence(hunter, 'gate');
 
-  if (!hunter) return null;
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl mx-auto mt-6">
-      <OnlinePlayersPanel 
-        players={onlinePlayers}
-        isConnected={isConnected}
-        location="gate"
-        error={error}
-      />
-      
-      <ChatPanel
-        currentHunter={{
-          id: hunter.id,
-          userId: hunter.userId,
-          name: hunter.name,
-          level: hunter.level,
-          class: hunter.class,
-          rank: hunter.rank,
-        }}
-        location="gate"
-        defaultChannel="location"
-      />
-    </div>
-  );
-}
 
 export default function GateClientContent({ hunterId }: GateContentProps) {
     return (
