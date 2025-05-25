@@ -44,7 +44,7 @@ Solo RPG is a modern, solo-friendly RPG that blends classic dungeon-crawling, Po
     /layout/
     /marketplace/
     /shop/
-    /skills/
+    /skills/              # Skills integrated in profile
     /solana/
     /ui/
   /constants/

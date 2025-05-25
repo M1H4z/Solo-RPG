@@ -15,7 +15,9 @@
 /page.tsx # Dungeon selection
 /[id]/page.tsx # Active dungeon
 /[id]/combat/page.tsx # Combat view
-/skills/page.tsx # Skills management
+
+# Skills management is integrated in Profile page
+
 /inventory/page.tsx # Inventory management  
  /shop/page.tsx # Shop
 /layout.tsx # Root layout
@@ -121,7 +123,7 @@
 /avatars # Avatar images
 /monsters # Monster images
 /items # Item images
-/skills # Skill icons
+/skills # Skill icons (unused - skills integrated in profile)
 /backgrounds # Background images
 /sounds # Sound effects and music
 /fonts # Custom fonts

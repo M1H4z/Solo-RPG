@@ -60,7 +60,7 @@ This checklist is based on the features outlined in the project's design and cur
   - [x] API: `/api/hunters/[hunterId]/allocate-stat`
 - [x] Navigation Links:
   - [x] Enter Gate -> Gate Hub (`/gate?hunterId=...`)
-  - [ ] Skills -> Skill Page (`/skills?hunterId=...`) - Page route missing, link commented out.
+  - [x] Skills -> Integrated in Profile Page (`/profile?hunterId=...`) - Full skills management available.
   - [x] Inventory -> Inventory Page (`/inventory?hunterId=...`)
   - [x] Shop -> Shop Page (`/shop?hunterId=...`)
 - [x] Solana Wallet Connect Button (Functionality TBD for currency)
@@ -180,7 +180,7 @@ This checklist is based on the features outlined in the project's design and cur
     - [x] Always active once unlocked
     - [x] Effects applied in `calculateDerivedStats`
 - [ ] Hybrid Skills (Shop/Events) - Design phase
-- [ ] General Skill Listing API (`/api/skills`) - Missing, for skill encyclopedia perhaps.
+- [x] Skills managed through Profile page - No separate `/api/skills` needed as functionality is integrated.
 
 ## IV. Calculations
 
