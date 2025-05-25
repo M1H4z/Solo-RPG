@@ -14,6 +14,14 @@ import {
   MessageType
 } from '@/types/chat.types';
 
+// Chat configuration constants
+const CHAT_CONFIG = {
+  MESSAGE_LIMIT: 100,        // Max messages to keep in memory per channel
+  MESSAGES_PER_PAGE: 30,     // Messages to load per page
+  AUTO_CLEANUP_THRESHOLD: 150, // Trigger cleanup when exceeding this many messages
+  SCROLL_THRESHOLD: 100,     // Pixels from top to trigger load more
+} as const;
+
 export const useChat = (
   currentHunter: {
     id: string;
@@ -35,9 +43,43 @@ export const useChat = (
   });
 
   const [activeChannelId, setActiveChannelId] = useState<string>();
+  const [loadingMore, setLoadingMore] = useState<Record<string, boolean>>({});
+  const [hasMoreMessages, setHasMoreMessages] = useState<Record<string, boolean>>({});
   const channelRef = useRef<RealtimeChannel | null>(null);
   const supabase = createSupabaseClient();
   const messageListeners = useRef<Set<string>>(new Set());
+  const stateRef = useRef(state);
+
+  // Update state ref whenever state changes
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  // Message cleanup function
+  const cleanupOldMessages = useCallback((channelId: string) => {
+    setState(prev => {
+      const messages = prev.messages[channelId] || [];
+      if (messages.length <= CHAT_CONFIG.AUTO_CLEANUP_THRESHOLD) {
+        return prev;
+      }
+
+      // Keep only the most recent MESSAGE_LIMIT messages
+      const sortedMessages = [...messages].sort((a, b) => 
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      const recentMessages = sortedMessages.slice(-CHAT_CONFIG.MESSAGE_LIMIT);
+
+      console.log(`Cleaned up ${messages.length - recentMessages.length} old messages for channel ${channelId}`);
+
+      return {
+        ...prev,
+        messages: {
+          ...prev.messages,
+          [channelId]: recentMessages
+        }
+      };
+    });
+  }, []);
 
   // Cleanup function
   const cleanup = useCallback(() => {
@@ -109,11 +151,16 @@ export const useChat = (
   }, [currentHunter, location, activeChannelId]);
 
   // Load messages for a channel
-  const loadMessages = useCallback(async (channelId: string, offset = 0) => {
+  const loadMessages = useCallback(async (channelId: string, offset = 0, append = false, silent = false) => {
     try {
+      // Only show loading indicator if it's not a silent/real-time update
+      if (!silent) {
+        setLoadingMore(prev => ({ ...prev, [channelId]: true }));
+      }
+
       const params = new URLSearchParams({
         channelId,
-        limit: '50',
+        limit: CHAT_CONFIG.MESSAGES_PER_PAGE.toString(),
         offset: offset.toString()
       });
 
@@ -124,14 +171,39 @@ export const useChat = (
         throw new Error(data.error || 'Failed to load messages');
       }
 
+      setState(prev => {
+        const existingMessages = prev.messages[channelId] || [];
+        let newMessages: typeof data.messages;
 
-
-      setState(prev => ({
-        ...prev,
-        messages: {
-          ...prev.messages,
-          [channelId]: offset === 0 ? data.messages : [...(prev.messages[channelId] || []), ...data.messages]
+        if (append && offset > 0) {
+          // Prepend older messages (for loading more history)
+          newMessages = [...data.messages, ...existingMessages];
+        } else {
+          // Replace messages (for initial load or refresh)
+          newMessages = data.messages;
         }
+
+        // Auto-cleanup if we have too many messages
+        if (newMessages.length > CHAT_CONFIG.AUTO_CLEANUP_THRESHOLD) {
+          const sortedMessages = [...newMessages].sort((a, b) => 
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          );
+          newMessages = sortedMessages.slice(-CHAT_CONFIG.MESSAGE_LIMIT);
+        }
+
+        return {
+          ...prev,
+          messages: {
+            ...prev.messages,
+            [channelId]: newMessages
+          }
+        };
+      });
+
+      // Update hasMore status
+      setHasMoreMessages(prev => ({
+        ...prev,
+        [channelId]: data.hasMore && data.messages.length === CHAT_CONFIG.MESSAGES_PER_PAGE
       }));
 
       return data.hasMore;
@@ -142,8 +214,24 @@ export const useChat = (
         error: error instanceof Error ? error.message : 'Failed to load messages'
       }));
       return false;
+    } finally {
+      // Only clear loading indicator if it was shown
+      if (!silent) {
+        setLoadingMore(prev => ({ ...prev, [channelId]: false }));
+      }
     }
   }, []);
+
+  // Load more messages (pagination)
+  const loadMoreMessages = useCallback(async (channelId: string) => {
+    const currentMessages = state.messages[channelId] || [];
+    if (loadingMore[channelId] || !hasMoreMessages[channelId]) {
+      return;
+    }
+
+    const offset = currentMessages.length;
+    await loadMessages(channelId, offset, true);
+  }, [state.messages, loadingMore, hasMoreMessages, loadMessages]);
 
   // Setup real-time subscriptions
   const setupRealtime = useCallback(() => {
@@ -162,7 +250,7 @@ export const useChat = (
 
       channelRef.current = channel;
 
-      // Listen for new messages - simplified approach
+      // Listen for new messages - optimized approach
       channel
         .on('postgres_changes', {
           event: 'INSERT',
@@ -171,21 +259,15 @@ export const useChat = (
         }, (payload) => {
           console.log('Real-time message received:', payload);
           
-          // Immediately refetch messages for the affected channel
           const newMessage = payload.new as any;
           
-          console.log('New message data:', {
-            channel_id: newMessage.channel_id,
-            sender_id: newMessage.sender_id,
-            hunter_id: newMessage.hunter_id,
-            content: newMessage.content
-          });
-          
-          // Add a small delay to ensure the transaction is committed
-          setTimeout(() => {
-            console.log('Refetching messages for channel:', newMessage.channel_id);
-            loadMessages(newMessage.channel_id, 0);
-          }, 100);
+          // Only process if this affects a channel we have loaded
+          if (stateRef.current.messages[newMessage.channel_id]) {
+            // Simple refetch after a short delay, but without triggering loading states
+            setTimeout(() => {
+              loadMessages(newMessage.channel_id, 0, false, true); // silent = true
+            }, 200);
+          }
         })
 
         .subscribe((status) => {
@@ -205,7 +287,7 @@ export const useChat = (
         isConnected: false
       }));
     }
-  }, [currentHunter, cleanup, loadMessages, supabase]);
+  }, [currentHunter, cleanup, supabase]);
 
   // Initialize
   useEffect(() => {
@@ -348,6 +430,8 @@ export const useChat = (
     error: state.error,
     unreadCount,
     totalUnreadCount,
+    loadingMore: activeChannelId ? loadingMore[activeChannelId] || false : false,
+    hasMoreMessages: activeChannelId ? hasMoreMessages[activeChannelId] || false : false,
 
     // Actions
     setActiveChannel: setActiveChannelId,
@@ -358,6 +442,7 @@ export const useChat = (
     leaveChannel,
     createChannel,
     markAsRead,
-    toggleMute
+    toggleMute,
+    loadMoreMessages: activeChannelId ? () => loadMoreMessages(activeChannelId) : () => Promise.resolve()
   };
 }; 

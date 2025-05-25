@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useChat } from '@/hooks/useChat';
 import { usePlayerPresence } from '@/hooks/usePlayerPresence';
 import { ChatPanelProps, ChatMessage, MessageType } from '@/types/chat.types';
@@ -50,8 +50,11 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     isLoading,
     error,
     totalUnreadCount,
+    loadingMore,
+    hasMoreMessages,
     setActiveChannel,
-    sendMessage
+    sendMessage,
+    loadMoreMessages
   } = useChat(currentHunter, location);
 
   const { onlinePlayers } = usePlayerPresence(currentHunter, location);
@@ -63,6 +66,31 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       container.scrollTop = container.scrollHeight;
     }
   };
+
+  // Handle scroll to load more messages
+  const handleScroll = useCallback(() => {
+    if (!messagesContainerRef.current || loadingMore || !hasMoreMessages) return;
+
+    const container = messagesContainerRef.current;
+    const { scrollTop } = container;
+
+    // Load more when scrolled to near the top
+    if (scrollTop < 100) {
+      const previousScrollHeight = container.scrollHeight;
+      const previousScrollTop = container.scrollTop;
+
+      loadMoreMessages().then(() => {
+        // Maintain scroll position after loading older messages
+        setTimeout(() => {
+          if (messagesContainerRef.current) {
+            const newScrollHeight = messagesContainerRef.current.scrollHeight;
+            const scrollDifference = newScrollHeight - previousScrollHeight;
+            messagesContainerRef.current.scrollTop = previousScrollTop + scrollDifference;
+          }
+        }, 50);
+      });
+    }
+  }, [loadingMore, hasMoreMessages, loadMoreMessages]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -217,7 +245,11 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 
       {/* Messages Area */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        <div ref={messagesContainerRef} className="h-full overflow-y-auto scrollbar-thin">
+        <div 
+          ref={messagesContainerRef} 
+          className="h-full overflow-y-auto scrollbar-thin"
+          onScroll={handleScroll}
+        >
           {isLoading ? (
             <div className="flex items-center justify-center h-full text-text-secondary">
               Loading messages...
@@ -227,43 +259,64 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
               No messages yet
             </div>
           ) : (
-            <div className="space-y-1 p-1 sm:p-2">
-              {messages.map((message) => (
-                <div key={message.id} className="flex items-start gap-1 sm:gap-2 hover:bg-surface/30 p-1 rounded">
-                  {/* Avatar/Icon */}
-                  <div className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 flex items-center justify-center">
-                    {message.sender_class ? (
-                      <div className="w-4 h-4 sm:w-5 sm:h-5">
-                        {getClassIcon(message.sender_class)}
-                      </div>
-                    ) : (
-                      <div className="w-4 h-4 sm:w-5 sm:h-5 bg-gray-600 rounded-full flex items-center justify-center">
-                        <span className="text-xs text-white">?</span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Message Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-1 sm:gap-2">
-                      <span className={cn(
-                        "font-medium text-xs sm:text-sm truncate max-w-24 sm:max-w-none",
-                        getRankColor(message.sender_rank || '')
-                      )}>
-                        {message.sender_name || 'Unknown Player'}
-                      </span>
-                      <span className="text-xs text-text-disabled">
-                        {formatTime(message.created_at)}
-                      </span>
+            <>
+              {/* Load More Indicator */}
+              {hasMoreMessages && (
+                <div className="flex items-center justify-center p-2">
+                  {loadingMore ? (
+                    <div className="flex items-center gap-2 text-xs text-text-secondary">
+                      <div className="w-3 h-3 border border-text-secondary border-t-transparent rounded-full animate-spin"></div>
+                      Loading older messages...
                     </div>
-                    <div className="text-xs sm:text-sm text-text-primary break-words">
-                      {message.content}
-                    </div>
-                  </div>
+                  ) : (
+                    <button
+                      onClick={loadMoreMessages}
+                      className="text-xs text-accent hover:text-accent-foreground hover:underline"
+                    >
+                      Load older messages
+                    </button>
+                  )}
                 </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
+              )}
+              
+              <div className="space-y-1 p-1 sm:p-2">
+                {messages.map((message) => (
+                  <div key={message.id} className="flex items-start gap-1 sm:gap-2 hover:bg-surface/30 p-1 rounded">
+                    {/* Avatar/Icon */}
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 flex items-center justify-center">
+                      {message.sender_class ? (
+                        <div className="w-4 h-4 sm:w-5 sm:h-5">
+                          {getClassIcon(message.sender_class)}
+                        </div>
+                      ) : (
+                        <div className="w-4 h-4 sm:w-5 sm:h-5 bg-gray-600 rounded-full flex items-center justify-center">
+                          <span className="text-xs text-white">?</span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Message Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-1 sm:gap-2">
+                        <span className={cn(
+                          "font-medium text-xs sm:text-sm truncate max-w-24 sm:max-w-none",
+                          getRankColor(message.sender_rank || '')
+                        )}>
+                          {message.sender_name || 'Unknown Player'}
+                        </span>
+                        <span className="text-xs text-text-disabled">
+                          {formatTime(message.created_at)}
+                        </span>
+                      </div>
+                      <div className="text-xs sm:text-sm text-text-primary break-words">
+                        {message.content}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div ref={messagesEndRef} />
+              </div>
+            </>
           )}
         </div>
       </div>

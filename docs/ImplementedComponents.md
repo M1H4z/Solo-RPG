@@ -22,8 +22,8 @@ This document lists all the React components implemented in the Solo RPG project
 ## Game Components (`src/components/game/`)
 
 - `CurrencyHistoryChart.tsx`: Displays a chart for currency history (likely for gold/diamonds).
-- `DashboardClientContent.tsx`: Main dashboard UI, displaying hunter stats, navigation, etc. Now includes real-time player presence panel.
-- `GateClientContent.tsx`: UI for the Gate Hub, allowing players to find and enter gates. Now includes real-time player presence panel.
+- `DashboardClientContent.tsx`: Main dashboard UI, displaying hunter stats, navigation, etc. Now includes fixed positioned real-time chat panel with mobile-responsive design.
+- `GateClientContent.tsx`: UI for the Gate Hub, allowing players to find and enter gates. Now includes fixed positioned real-time chat panel with mobile-responsive design.
 - `InventoryClientContent.tsx`: Manages the player's inventory, item display, and equipment. Now includes real-time player presence panel.
 - `ProfileClientContent.tsx`: Displays detailed hunter profile information (potentially a more detailed view than the dashboard).
 - `ShopClientContent.tsx`: UI for the in-game item shop. Now includes real-time player presence panel. (Note: also listed under `src/components/shop/`)
@@ -50,7 +50,8 @@ This document lists all the React components implemented in the Solo RPG project
 
 ## Multiplayer Components (`src/components/multiplayer/`)
 
-- `OnlinePlayersPanel.tsx`: Displays real-time list of online players with their hunter information (name, level, class, rank). Includes functionality for expanding/collapsing player list, connection status indicator, and error handling. Integrated into Dashboard, Gate, Inventory, Shop, and Dungeon pages.
+- `ChatPanel.tsx`: Real-time chat system with multi-channel support (Global, Location, Direct, Party). Features include minimizable interface, mobile-responsive design, auto-scroll to latest messages, and autocomplete prevention. Fixed positioned at bottom-left with full mobile support for iPhone 15 Pro and all devices.
+- `OnlinePlayersPanel.tsx`: Displays real-time list of online players with their hunter information (name, level, class, rank). Includes functionality for expanding/collapsing player list, connection status indicator, and error handling. Integrated into Inventory, Shop, and Dungeon pages.
 
 ## Shop Components (`src/components/shop/`)
 
@@ -93,6 +94,14 @@ This document lists all the React components implemented in the Solo RPG project
 
 ## Real-Time Multiplayer Features
 
-- **Player Presence System**: Real-time tracking of online players across all game locations (Dashboard, Gate, Inventory, Shop, Dungeons). Shows player count, hunter details (name, level, class, rank), and connection status. Automatically updates when players join/leave or change locations.
-- **Location-Based Presence**: Players are tracked by their current location in the game, allowing for location-specific player lists.
-- **Connection Management**: Robust error handling and reconnection logic for real-time features.
+- **Chat System**: Real-time messaging system with multi-channel support (Global, Location-based, Direct messaging, Party chat). Features automatic message scrolling, mobile-responsive design, and cross-user hunter name resolution. Implements Row Level Security (RLS) policies for secure cross-user data access while protecting sensitive information.
+
+- **Player Presence System**: Real-time tracking of online players across all game locations (Inventory, Shop, Dungeons). Shows player count, hunter details (name, level, class, rank), and connection status. Automatically updates when players join/leave or change locations.
+
+- **Mobile-First Design**: All real-time components are optimized for mobile devices including iPhone 15 Pro, with responsive positioning and sizing that prevents overflow issues.
+
+- **Fixed Positioning**: Chat panels use consistent fixed positioning (bottom-left) across Dashboard and Gate pages with mobile-responsive margins and full-width mobile support.
+
+- **Location-Based Presence**: Players are tracked by their current location in the game, allowing for location-specific player lists and chat channels.
+
+- **Connection Management**: Robust error handling and reconnection logic for real-time features with automatic retry mechanisms and graceful degradation.

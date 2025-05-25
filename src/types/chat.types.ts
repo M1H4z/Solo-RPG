@@ -92,6 +92,8 @@ export interface UseChatReturn {
   error?: string;
   unreadCount: number;
   totalUnreadCount: number;
+  loadingMore: boolean;
+  hasMoreMessages: boolean;
 
   // Actions
   setActiveChannel: (channelId: string) => void;
@@ -103,6 +105,7 @@ export interface UseChatReturn {
   createChannel: (payload: CreateChannelPayload) => Promise<ChatChannel>;
   markAsRead: (channelId: string) => Promise<void>;
   toggleMute: (channelId: string) => Promise<void>;
+  loadMoreMessages: () => Promise<void>;
 }
 
 export interface ChatPanelProps {
