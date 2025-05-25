@@ -41,12 +41,23 @@ export async function GET(request: Request) {
             throw new Error('Failed to retrieve gate status from database.');
         }
 
-        // 4. Check for expired gates (optional cleanup)
+        // 4. Check for expired gates and clean them up
         if (activeGate && new Date(activeGate.expires_at) < new Date()) {
-             console.log(`Found expired gate for hunter ${hunterId}, ID: ${activeGate.id}.`);
-            // Optionally: Implement logic here or in a separate cron job
-            // to delete expired gates automatically.
-            // For now, we'll just return null as if it doesn't exist.
+            console.log(`Found expired gate for hunter ${hunterId}, ID: ${activeGate.id}. Cleaning up...`);
+            
+            // Delete the expired gate from the database
+            const { error: deleteError } = await supabase
+                .from('active_gates')
+                .delete()
+                .eq('id', activeGate.id);
+            
+            if (deleteError) {
+                console.error('Error deleting expired gate:', deleteError);
+                // Even if deletion fails, we'll return null since the gate is expired
+            } else {
+                console.log(`Successfully cleaned up expired gate ${activeGate.id}`);
+            }
+            
             return NextResponse.json({ activeGate: null }, { status: 200 });
         }
 

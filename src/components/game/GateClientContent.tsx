@@ -234,28 +234,30 @@ function GateContent({ hunterId }: GateContentProps) {
                         );
                      })()}
 
-                     <Card className="border-primary/60 bg-surface/80 backdrop-blur-sm">
-                           <CardHeader className="pb-2 pt-3">
-                               <CardTitle className="text-base sm:text-lg">
-                                   {activeGate.gate_type}
-                                </CardTitle>
-                                <CardDescription className="text-xs sm:text-sm">
-                                   Depth {activeGate.current_depth}/{activeGate.total_depth} | Room {activeGate.current_room}/{activeGate.rooms_per_depth[activeGate.current_depth - 1]}
-                               </CardDescription>
-                           </CardHeader>
-                            <CardContent className="pb-3">
-                                <p className="text-xs text-accent sm:text-sm">
-                                    Expires: {new Date(activeGate.expires_at).toLocaleString()}
-                                </p>
-                           </CardContent>
-                         </Card>
-                         <div className="flex flex-col justify-center gap-4 pt-2 sm:flex-row">
-                           <Button onClick={() => handleEnterGate(activeGate.id)} disabled={actionLoading}>
-                             Enter Gate
-                           </Button>
-                           <Button size="lg" variant="destructive" onClick={() => handleAbandonGate(activeGate.id)} disabled={actionLoading}>
-                             Abandon Gate
-                           </Button>
+                     <div className="w-full max-w-sm">
+                       <Card className="border-primary/60 bg-surface/80 backdrop-blur-sm">
+                             <CardHeader className="pb-2 pt-3">
+                                 <CardTitle className="text-base sm:text-lg">
+                                     {activeGate.gate_type}
+                                  </CardTitle>
+                                  <CardDescription className="text-xs sm:text-sm">
+                                     Depth {activeGate.current_depth}/{activeGate.total_depth} | Room {activeGate.current_room}/{activeGate.rooms_per_depth[activeGate.current_depth - 1]}
+                                 </CardDescription>
+                             </CardHeader>
+                              <CardContent className="pb-3">
+                                  <p className="text-xs text-accent sm:text-sm">
+                                      Expires: {new Date(activeGate.expires_at).toLocaleString()}
+                                  </p>
+                             </CardContent>
+                           </Card>
+                           <div className="flex w-full flex-col justify-center gap-4 pt-2 sm:flex-row">
+                             <Button size="lg" className="w-full sm:flex-1" onClick={() => handleEnterGate(activeGate.id)} disabled={actionLoading}>
+                               Enter Gate
+                             </Button>
+                             <Button size="lg" variant="destructive" className="w-full sm:flex-1" onClick={() => handleAbandonGate(activeGate.id)} disabled={actionLoading}>
+                               Abandon Gate
+                             </Button>
+                           </div>
                          </div>
                      </div>
             ) : (

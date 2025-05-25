@@ -65,16 +65,38 @@ export async function POST(request: Request) {
         if (hunterError) throw new Error('Hunter not found.');
         if (!hunter || hunter.user_id !== userId) throw new Error('Unauthorized access to hunter.');
 
-        // 4. Check if hunter already has an active gate
+        // 4. Check if hunter already has an active gate and clean up expired ones
         const { data: existingGate, error: checkError } = await supabase
             .from('active_gates')
-            .select('id')
+            .select('id, expires_at')
             .eq('hunter_id', hunterId)
             .maybeSingle();
 
         if (checkError) throw new Error('Failed to check existing gates.');
+        
         if (existingGate) {
-            return NextResponse.json({ error: 'Hunter already has an active gate.' }, { status: 409 }); // 409 Conflict
+            // Check if the existing gate is expired
+            if (new Date(existingGate.expires_at) < new Date()) {
+                console.log(`Found expired gate for hunter ${hunterId}, ID: ${existingGate.id}. Cleaning up before creating new gate...`);
+                
+                // Delete the expired gate
+                const { error: deleteError } = await supabase
+                    .from('active_gates')
+                    .delete()
+                    .eq('id', existingGate.id);
+                
+                if (deleteError) {
+                    console.error('Error deleting expired gate:', deleteError);
+                    throw new Error('Failed to clean up expired gate.');
+                } else {
+                    console.log(`Successfully cleaned up expired gate ${existingGate.id}`);
+                }
+                
+                // Continue with gate creation since the expired gate has been removed
+            } else {
+                // Gate is still active, cannot create a new one
+                return NextResponse.json({ error: 'Hunter already has an active gate.' }, { status: 409 }); // 409 Conflict
+            }
         }
 
         // 5. TODO: Check Resources (Energy/Keys?) - Add later if needed
